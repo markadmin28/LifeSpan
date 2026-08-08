@@ -7,6 +7,7 @@ import android.content.Context
 import com.lifespan.app.data.db.LifeSpanDatabase
 import com.lifespan.app.data.prefs.SettingsRepository
 import com.lifespan.app.data.repository.BatteryRepository
+import com.lifespan.app.data.usage.AppUsageRepository
 
 /** Minimal manual dependency container shared across the app process. */
 class AppContainer(context: Context) {
@@ -16,6 +17,7 @@ class AppContainer(context: Context) {
         database.telemetryLogDao(),
     )
     val settingsRepository = SettingsRepository(context)
+    val appUsageRepository = AppUsageRepository(context.applicationContext)
 }
 
 class LifeSpanApp : Application() {

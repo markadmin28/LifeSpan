@@ -1,5 +1,6 @@
 package com.lifespan.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,12 +9,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thermostat
@@ -63,6 +67,11 @@ fun MainScreen(
     onChargeLimitEnabledChange: (Boolean) -> Unit,
     canDrawOverlays: Boolean = true,
     onBubbleEnabledChange: (Boolean) -> Unit = {},
+    usageAccess: Boolean = true,
+    topUsageLabel: String? = null,
+    topUsageMinutes: Long? = null,
+    highUsageCount: Int = 0,
+    onOpenHighUsage: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -97,6 +106,16 @@ fun MainScreen(
             }
 
             item { BatteryStatusCard(state.snapshot) }
+
+            item {
+                HighUsageCard(
+                    hasAccess = usageAccess,
+                    topLabel = topUsageLabel,
+                    topMinutes = topUsageMinutes,
+                    highCount = highUsageCount,
+                    onClick = onOpenHighUsage,
+                )
+            }
 
             item {
                 MonitoringControl(
@@ -348,6 +367,56 @@ private fun ThresholdsCard(
                 valueRange = 35f..50f,
                 steps = 14,
                 enabled = overheatEnabled,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HighUsageCard(
+    hasAccess: Boolean,
+    topLabel: String?,
+    topMinutes: Long?,
+    highCount: Int,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.BatteryAlert,
+                contentDescription = null,
+                tint = if (highCount > 0) Danger else Amber,
+                modifier = Modifier.size(30.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("High battery usage", fontWeight = FontWeight.Bold)
+                val subtitle = when {
+                    !hasAccess -> "Grant usage access to see which apps drain your battery"
+                    topLabel != null ->
+                        "$topLabel${topMinutes?.let { " · ${it}m" } ?: ""}" +
+                            if (highCount > 0) "  ·  $highCount high" else ""
+                    else -> "Tap to see the biggest battery-draining apps"
+                }
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                )
+            }
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             )
         }
     }

@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -41,14 +42,17 @@ class MainActivity : ComponentActivity() {
             LifeSpanTheme {
                 val vm: MainViewModel = viewModel()
                 val state by vm.uiState.collectAsStateWithLifecycle()
+                val usage by vm.usage.collectAsStateWithLifecycle()
                 val context = LocalContext.current
 
                 var canDrawOverlays by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+                var showHighUsage by remember { mutableStateOf(false) }
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_RESUME) {
                             canDrawOverlays = Settings.canDrawOverlays(context)
+                            vm.refreshUsage()
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
@@ -60,28 +64,66 @@ class MainActivity : ComponentActivity() {
                 ) {
                     canDrawOverlays = Settings.canDrawOverlays(context)
                 }
+                val usageAccessLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult(),
+                ) {
+                    vm.refreshUsage()
+                }
 
-                MainScreen(
-                    state = state,
-                    onStart = vm::startMonitoring,
-                    onStop = vm::stopMonitoring,
-                    onChargeLimitChange = vm::setChargeLimit,
-                    onOverheatChange = vm::setOverheatCelsius,
-                    onOverheatEnabledChange = vm::setOverheatEnabled,
-                    onChargeLimitEnabledChange = vm::setChargeLimitEnabled,
-                    canDrawOverlays = canDrawOverlays,
-                    onBubbleEnabledChange = { enabled ->
-                        if (enabled && !Settings.canDrawOverlays(context)) {
-                            overlayLauncher.launch(
-                                Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}"),
-                                ),
-                            )
-                        }
-                        vm.setBubbleEnabled(enabled)
-                    },
-                )
+                val onForceStop: (com.lifespan.app.domain.usage.AppUsage) -> Unit = { app ->
+                    vm.killBackground(app.packageName)
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:${app.packageName}"),
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                }
+
+                if (showHighUsage) {
+                    BackHandler { showHighUsage = false }
+                    HighUsageScreen(
+                        state = usage,
+                        onBack = { showHighUsage = false },
+                        onForceStop = onForceStop,
+                    )
+                } else {
+                    MainScreen(
+                        state = state,
+                        onStart = vm::startMonitoring,
+                        onStop = vm::stopMonitoring,
+                        onChargeLimitChange = vm::setChargeLimit,
+                        onOverheatChange = vm::setOverheatCelsius,
+                        onOverheatEnabledChange = vm::setOverheatEnabled,
+                        onChargeLimitEnabledChange = vm::setChargeLimitEnabled,
+                        canDrawOverlays = canDrawOverlays,
+                        onBubbleEnabledChange = { enabled ->
+                            if (enabled && !Settings.canDrawOverlays(context)) {
+                                overlayLauncher.launch(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
+                            vm.setBubbleEnabled(enabled)
+                        },
+                        usageAccess = usage.hasAccess,
+                        topUsageLabel = usage.topApp?.label,
+                        topUsageMinutes = usage.topApp?.foregroundMinutes,
+                        highUsageCount = usage.highCount,
+                        onOpenHighUsage = {
+                            if (usage.hasAccess) {
+                                vm.refreshUsage()
+                                showHighUsage = true
+                            } else {
+                                usageAccessLauncher.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                            }
+                        },
+                    )
+                }
             }
         }
     }
