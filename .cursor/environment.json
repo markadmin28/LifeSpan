@@ -1,0 +1,15 @@
+{
+  "name": "LifeSpan",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "npm run dev",
+      "description": "Runs the Express API (port 3001) and the Vite React dev server (port 5173) together via `npm run dev`."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 5173 },
+    { "name": "api", "port": 3001 }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "lifespan",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LifeSpan — visualize your life in weeks and estimate how much time remains.",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:web": "npm --workspace web run dev",
+    "build": "npm --workspace server run build && npm --workspace web run build",
+    "start": "npm --workspace server run start",
+    "typecheck": "npm --workspace server run typecheck && npm --workspace web run typecheck",
+    "lint": "eslint .",
+    "test": "npm --workspace server run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "concurrently": "^9.0.1",
+    "eslint": "^9.9.0",
+    "globals": "^15.9.0",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
