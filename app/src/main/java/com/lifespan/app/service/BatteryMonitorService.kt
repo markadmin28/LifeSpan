@@ -184,7 +184,7 @@ class BatteryMonitorService : LifecycleService() {
         }
 
         return NotificationCompat.Builder(this, LifeSpanApp.CHANNEL_MONITOR)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_monitor)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
