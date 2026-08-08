@@ -22,6 +22,7 @@ class SettingsRepository(private val context: Context) {
         val CHARGE_LIMIT = intPreferencesKey("charge_limit_percent")
         val OVERHEAT_ENABLED = booleanPreferencesKey("overheat_enabled")
         val CHARGE_LIMIT_ENABLED = booleanPreferencesKey("charge_limit_enabled")
+        val BUBBLE_ENABLED = booleanPreferencesKey("bubble_enabled")
     }
 
     val thresholds: Flow<AlertThresholds> = context.dataStore.data.map { prefs ->
@@ -48,5 +49,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setChargeLimitEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.CHARGE_LIMIT_ENABLED] = enabled }
+    }
+
+    /** Whether the floating charging bubble overlay is enabled. Defaults to on. */
+    val bubbleEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.BUBBLE_ENABLED] ?: true
+    }
+
+    suspend fun setBubbleEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.BUBBLE_ENABLED] = enabled }
     }
 }

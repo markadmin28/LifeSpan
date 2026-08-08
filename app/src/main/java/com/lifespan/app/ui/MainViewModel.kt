@@ -22,6 +22,7 @@ data class MainUiState(
     val monitoring: Boolean = false,
     val sessions: List<ChargeSessionEntity> = emptyList(),
     val activeAlerts: Set<AlertType> = emptySet(),
+    val bubbleEnabled: Boolean = true,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -35,13 +36,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         settingsRepository.thresholds,
         batteryRepository.monitoring,
         batteryRepository.observeRecentSessions(limit = 25),
-    ) { snapshot, thresholds, monitoring, sessions ->
+        settingsRepository.bubbleEnabled,
+    ) { snapshot, thresholds, monitoring, sessions, bubbleEnabled ->
         MainUiState(
             snapshot = snapshot,
             thresholds = thresholds,
             monitoring = monitoring,
             sessions = sessions,
             activeAlerts = snapshot?.let { AlertEvaluator.evaluate(it, thresholds) } ?: emptySet(),
+            bubbleEnabled = bubbleEnabled,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -67,5 +70,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setChargeLimitEnabled(enabled: Boolean) = viewModelScope.launch {
         settingsRepository.setChargeLimitEnabled(enabled)
+    }
+
+    fun setBubbleEnabled(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setBubbleEnabled(enabled)
     }
 }

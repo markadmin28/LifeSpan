@@ -20,6 +20,7 @@ import com.lifespan.app.domain.alert.AlertEvaluator
 import com.lifespan.app.domain.alert.AlertThresholds
 import com.lifespan.app.domain.alert.AlertType
 import com.lifespan.app.domain.battery.BatteryCalculator
+import com.lifespan.app.domain.bubble.BubbleStatusEvaluator
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.ui.MainActivity
@@ -38,9 +39,13 @@ class BatteryMonitorService : LifecycleService() {
     private lateinit var app: LifeSpanApp
     private lateinit var batteryManager: BatteryManager
     private lateinit var alertManager: AlertManager
+    private lateinit var bubble: ChargingBubbleController
 
     @Volatile
     private var thresholds: AlertThresholds = AlertThresholds()
+
+    @Volatile
+    private var bubbleEnabled: Boolean = true
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -55,10 +60,17 @@ class BatteryMonitorService : LifecycleService() {
         app = application as LifeSpanApp
         batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         alertManager = AlertManager(this)
+        bubble = ChargingBubbleController(this)
         app.container.batteryRepository.setMonitoring(true)
 
         lifecycleScope.launch {
             app.container.settingsRepository.thresholds.collect { thresholds = it }
+        }
+        lifecycleScope.launch {
+            app.container.settingsRepository.bubbleEnabled.collect { enabled ->
+                bubbleEnabled = enabled
+                if (!enabled) bubble.remove()
+            }
         }
         lifecycleScope.launch { app.container.batteryRepository.restoreActiveSession() }
 
@@ -87,6 +99,15 @@ class BatteryMonitorService : LifecycleService() {
         val alerts = AlertEvaluator.evaluate(snapshot, thresholds)
         if (alerts.isNotEmpty()) alertManager.maybeAlert(alerts)
         startForeground(snapshot, alerts)
+        updateBubble(snapshot)
+    }
+
+    private fun updateBubble(snapshot: BatterySnapshot) {
+        if (bubbleEnabled && snapshot.isCharging) {
+            bubble.render(BubbleStatusEvaluator.evaluate(snapshot, thresholds))
+        } else {
+            bubble.remove()
+        }
     }
 
     private fun readSnapshot(intent: Intent): BatterySnapshot {
@@ -177,6 +198,7 @@ class BatteryMonitorService : LifecycleService() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(batteryReceiver) }
+        bubble.remove()
         app.container.batteryRepository.setMonitoring(false)
         super.onDestroy()
     }

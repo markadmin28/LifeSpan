@@ -61,6 +61,8 @@ fun MainScreen(
     onOverheatChange: (Double) -> Unit,
     onOverheatEnabledChange: (Boolean) -> Unit,
     onChargeLimitEnabledChange: (Boolean) -> Unit,
+    canDrawOverlays: Boolean = true,
+    onBubbleEnabledChange: (Boolean) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -114,6 +116,14 @@ fun MainScreen(
                     onOverheatChange = onOverheatChange,
                     onOverheatEnabledChange = onOverheatEnabledChange,
                     onChargeLimitEnabledChange = onChargeLimitEnabledChange,
+                )
+            }
+
+            item {
+                BubbleCard(
+                    enabled = state.bubbleEnabled,
+                    canDrawOverlays = canDrawOverlays,
+                    onEnabledChange = onBubbleEnabledChange,
                 )
             }
 
@@ -339,6 +349,43 @@ private fun ThresholdsCard(
                 steps = 14,
                 enabled = overheatEnabled,
             )
+        }
+    }
+}
+
+@Composable
+private fun BubbleCard(
+    enabled: Boolean,
+    canDrawOverlays: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Floating charging bubble", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Shows a draggable status bubble over other apps while charging. " +
+                            "It turns amber in the home stretch and red at your limit.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(checked = enabled, onCheckedChange = onEnabledChange)
+            }
+            if (enabled && !canDrawOverlays) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "⚠ Grant \"Display over other apps\" for the bubble to appear. Tap the toggle to open the setting.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Amber,
+                )
+            }
         }
     }
 }
