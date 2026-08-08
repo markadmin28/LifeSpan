@@ -2,6 +2,10 @@ import { useMemo, useState, type FormEvent } from 'react';
 import type { LifeStats } from './types';
 
 const numberFormat = new Intl.NumberFormat('en-US');
+const compactFormat = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 2,
+});
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -115,7 +119,7 @@ export default function App() {
             <StatCard label="Weeks lived" value={numberFormat.format(stats.weeksLived)} />
             <StatCard label="Weeks remaining" value={numberFormat.format(stats.weeksRemaining)} />
             <StatCard label="Days lived" value={numberFormat.format(stats.daysLived)} />
-            <StatCard label="Est. heartbeats" value={numberFormat.format(stats.approxHeartbeats)} />
+            <StatCard label="Est. heartbeats" value={compactFormat.format(stats.approxHeartbeats)} />
             <StatCard label="Est. final year" value={stats.estimatedEndDate.slice(0, 4)} />
           </div>
 
