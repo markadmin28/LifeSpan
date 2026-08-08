@@ -69,7 +69,7 @@ fun MainScreen(
     onBubbleEnabledChange: (Boolean) -> Unit = {},
     usageAccess: Boolean = true,
     topUsageLabel: String? = null,
-    topUsageMinutes: Long? = null,
+    topUsagePercent: Int? = null,
     highUsageCount: Int = 0,
     onOpenHighUsage: () -> Unit = {},
 ) {
@@ -111,7 +111,7 @@ fun MainScreen(
                 HighUsageCard(
                     hasAccess = usageAccess,
                     topLabel = topUsageLabel,
-                    topMinutes = topUsageMinutes,
+                    topPercent = topUsagePercent,
                     highCount = highUsageCount,
                     onClick = onOpenHighUsage,
                 )
@@ -376,7 +376,7 @@ private fun ThresholdsCard(
 private fun HighUsageCard(
     hasAccess: Boolean,
     topLabel: String?,
-    topMinutes: Long?,
+    topPercent: Int?,
     highCount: Int,
     onClick: () -> Unit,
 ) {
@@ -403,7 +403,7 @@ private fun HighUsageCard(
                 val subtitle = when {
                     !hasAccess -> "Grant usage access to see which apps drain your battery"
                     topLabel != null ->
-                        "$topLabel${topMinutes?.let { " · ${it}m" } ?: ""}" +
+                        "$topLabel${topPercent?.let { " · ~$it%" } ?: ""}" +
                             if (highCount > 0) "  ·  $highCount high" else ""
                     else -> "Tap to see the biggest battery-draining apps"
                 }

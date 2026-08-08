@@ -82,9 +82,9 @@ class ChargingBubbleController(private val context: Context) {
 
     private fun bind(v: View, status: BubbleStatus) {
         val color = when (status.level) {
-            BubbleLevel.NORMAL -> Color.parseColor("#0EA5E9")
-            BubbleLevel.WARNING -> Color.parseColor("#F59E0B")
-            BubbleLevel.DANGER -> Color.parseColor("#DC2626")
+            BubbleLevel.NORMAL -> Color.parseColor("#5CC5EA")
+            BubbleLevel.WARNING -> Color.parseColor("#F5B301")
+            BubbleLevel.DANGER -> Color.parseColor("#E4572E")
         }
         val root = v.findViewById<View>(R.id.bubble_root)
         root.backgroundTintList = ColorStateList.valueOf(color)

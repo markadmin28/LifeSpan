@@ -57,6 +57,7 @@ class AppUsageRepository(private val context: Context) {
         val start = end - windowMillis
 
         val totals = HashMap<String, Long>()
+        val lastUsed = HashMap<String, Long>()
         val stats = usageStatsManager.queryUsageStats(
             UsageStatsManager.INTERVAL_BEST,
             start,
@@ -67,6 +68,8 @@ class AppUsageRepository(private val context: Context) {
             if (stat.packageName == ownPackage) continue
             totals[stat.packageName] =
                 (totals[stat.packageName] ?: 0L) + stat.totalTimeInForeground
+            lastUsed[stat.packageName] =
+                maxOf(lastUsed[stat.packageName] ?: 0L, stat.lastTimeUsed)
         }
 
         val pm = context.packageManager
@@ -74,7 +77,12 @@ class AppUsageRepository(private val context: Context) {
             val label = runCatching {
                 pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
             }.getOrNull() ?: return@mapNotNull null
-            AppUsage(packageName = pkg, label = label, foregroundMillis = millis)
+            AppUsage(
+                packageName = pkg,
+                label = label,
+                foregroundMillis = millis,
+                lastUsedMillis = lastUsed[pkg] ?: 0L,
+            )
         }
         UsageRanker.rank(apps, limit)
     }

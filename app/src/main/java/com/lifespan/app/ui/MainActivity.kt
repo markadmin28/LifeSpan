@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifespan.app.ui.theme.LifeSpanTheme
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
@@ -88,6 +89,7 @@ class MainActivity : ComponentActivity() {
                         state = usage,
                         onBack = { showHighUsage = false },
                         onForceStop = onForceStop,
+                        onRefresh = vm::refreshUsage,
                     )
                 } else {
                     MainScreen(
@@ -112,7 +114,7 @@ class MainActivity : ComponentActivity() {
                         },
                         usageAccess = usage.hasAccess,
                         topUsageLabel = usage.topApp?.label,
-                        topUsageMinutes = usage.topApp?.foregroundMinutes,
+                        topUsagePercent = usage.topApp?.batteryPercent?.roundToInt(),
                         highUsageCount = usage.highCount,
                         onOpenHighUsage = {
                             if (usage.hasAccess) {
