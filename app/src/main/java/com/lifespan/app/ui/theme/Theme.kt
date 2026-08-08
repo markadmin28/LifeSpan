@@ -12,43 +12,43 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColors = darkColorScheme(
-    primary = OrangeSoft,
-    onPrimary = Color(0xFF3A1A00),
-    primaryContainer = Color(0xFF7A3B10),
-    onPrimaryContainer = Cream,
-    secondary = Gold,
-    onSecondary = Color(0xFF3A2A00),
-    tertiary = LightBlue,
-    onTertiary = Color(0xFF042231),
-    background = WarmBgDark,
-    surface = WarmSurfaceDark,
-    surfaceVariant = Color(0xFF3A2E24),
-    onBackground = WarmOnDark,
-    onSurface = WarmOnDark,
+    primary = Sky,
+    onPrimary = Color(0xFF04121F),
+    primaryContainer = Color(0xFF0B4A6F),
+    onPrimaryContainer = Color(0xFFD8F3FF),
+    secondary = Violet,
+    onSecondary = Color(0xFF23103A),
+    tertiary = Indigo,
+    onTertiary = Color(0xFF10163A),
+    background = BgDark,
+    surface = SurfaceDark,
+    surfaceVariant = SurfaceVariantDark,
+    onBackground = OnDark,
+    onSurface = OnDark,
     error = Danger,
 )
 
 private val LightColors = lightColorScheme(
-    primary = Orange,
+    primary = SkyDeep,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFDCC2),
-    onPrimaryContainer = Color(0xFF3A1A00),
-    secondary = Gold,
-    onSecondary = Color(0xFF3A2A00),
-    tertiary = LightBlueDeep,
+    primaryContainer = Color(0xFFCDEEFF),
+    onPrimaryContainer = Color(0xFF04121F),
+    secondary = Violet,
+    onSecondary = Color.White,
+    tertiary = Indigo,
     onTertiary = Color.White,
-    background = Cream,
-    surface = CreamElevated,
-    surfaceVariant = Color(0xFFF3E4D0),
-    onBackground = WarmInk,
-    onSurface = WarmInk,
+    background = CoolBgLight,
+    surface = CoolSurfaceLight,
+    surfaceVariant = Color(0xFFE6ECFA),
+    onBackground = CoolInk,
+    onSurface = CoolInk,
     error = Danger,
 )
 
 @Composable
 fun LifeSpanTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Off by default so the warm brand motif is used instead of the device wallpaper palette.
+    // Off by default so the brand motif is used instead of the device wallpaper palette.
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {

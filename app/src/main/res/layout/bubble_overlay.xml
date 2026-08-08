@@ -5,7 +5,7 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:background="@drawable/bubble_background"
-    android:backgroundTint="#5CC5EA"
+    android:backgroundTint="#38BDF8"
     android:elevation="8dp"
     android:orientation="vertical"
     android:paddingStart="12dp"
