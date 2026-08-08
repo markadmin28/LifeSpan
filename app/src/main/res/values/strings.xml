@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">LifeSpan</string>
+    <string name="monitor_channel_name">Battery Monitor</string>
+    <string name="monitor_channel_desc">Persistent battery, thermal and charge-rate status.</string>
+    <string name="alert_channel_name">Battery Alerts</string>
+    <string name="alert_channel_desc">Overheat and charge-limit warnings.</string>
+</resources>
