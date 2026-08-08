@@ -13,6 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TextView
 import com.lifespan.app.R
 import com.lifespan.app.domain.bubble.BubbleLevel
@@ -34,6 +35,7 @@ class ChargingBubbleController(private val context: Context) {
 
     private var view: View? = null
     private var params: WindowManager.LayoutParams? = null
+    private var expanded: Boolean = false
 
     private fun canDraw(): Boolean = Settings.canDrawOverlays(context)
 
@@ -102,6 +104,29 @@ class ChargingBubbleController(private val context: Context) {
             status.powerWatts,
             status.caption,
         )
+
+        // Charge-limit progress bar
+        v.findViewById<TextView>(R.id.bubble_charge_label).text = String.format(
+            Locale.US,
+            "Charge  %d%% / %d%%",
+            status.percent,
+            status.chargeLimitPercent,
+        )
+        v.findViewById<ProgressBar>(R.id.bubble_charge_bar)
+            .setProgress(status.chargeProgress, true)
+
+        // Overheat progress bar
+        v.findViewById<TextView>(R.id.bubble_overheat_label).text = String.format(
+            Locale.US,
+            "Temp  %.1f°C / %.0f°C",
+            status.temperatureCelsius,
+            status.overheatCelsius,
+        )
+        v.findViewById<ProgressBar>(R.id.bubble_overheat_bar)
+            .setProgress(status.overheatProgress, true)
+
+        v.findViewById<View>(R.id.bubble_expand).visibility =
+            if (expanded) View.VISIBLE else View.GONE
     }
 
     private fun attachDragHandler(v: View, lp: WindowManager.LayoutParams) {
@@ -110,6 +135,8 @@ class ChargingBubbleController(private val context: Context) {
         var touchX = 0f
         var touchY = 0f
         var dragging = false
+        var downTime = 0L
+        val longPressMs = 500L
 
         v.setOnTouchListener { _, event ->
             when (event.action) {
@@ -119,6 +146,7 @@ class ChargingBubbleController(private val context: Context) {
                     touchX = event.rawX
                     touchY = event.rawY
                     dragging = false
+                    downTime = System.currentTimeMillis()
                     true
                 }
 
@@ -133,13 +161,23 @@ class ChargingBubbleController(private val context: Context) {
                 }
 
                 MotionEvent.ACTION_UP -> {
-                    if (!dragging) openApp()
+                    if (!dragging) {
+                        val heldMs = System.currentTimeMillis() - downTime
+                        if (heldMs >= longPressMs) openApp() else toggleExpand(v)
+                    }
                     true
                 }
 
                 else -> false
             }
         }
+    }
+
+    private fun toggleExpand(v: View) {
+        expanded = !expanded
+        v.findViewById<View>(R.id.bubble_expand).visibility =
+            if (expanded) View.VISIBLE else View.GONE
+        params?.let { runCatching { windowManager.updateViewLayout(v, it) } }
     }
 
     private fun openApp() {

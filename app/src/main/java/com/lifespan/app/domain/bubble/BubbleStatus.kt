@@ -3,6 +3,7 @@ package com.lifespan.app.domain.bubble
 import com.lifespan.app.domain.alert.AlertEvaluator
 import com.lifespan.app.domain.alert.AlertThresholds
 import com.lifespan.app.domain.model.BatterySnapshot
+import kotlin.math.roundToInt
 
 /** Visual urgency of the floating charging bubble. */
 enum class BubbleLevel { NORMAL, WARNING, DANGER }
@@ -16,6 +17,12 @@ data class BubbleStatus(
     val plugLabel: String,
     val inHomeStretch: Boolean,
     val caption: String,
+    val chargeLimitPercent: Int,
+    val overheatCelsius: Double,
+    /** Battery level as progress toward the charge limit, 0..100. */
+    val chargeProgress: Int,
+    /** Temperature as progress toward the overheat threshold, 0..100. */
+    val overheatProgress: Int,
 )
 
 /**
@@ -46,6 +53,18 @@ object BubbleStatusEvaluator {
             else -> snapshot.plugType.label
         }
 
+        val chargeProgress = if (thresholds.chargeLimitPercent > 0) {
+            (snapshot.level * 100 / thresholds.chargeLimitPercent).coerceIn(0, 100)
+        } else {
+            snapshot.level.coerceIn(0, 100)
+        }
+        val overheatProgress = if (thresholds.overheatCelsius > 0) {
+            ((snapshot.temperatureCelsius / thresholds.overheatCelsius) * 100).roundToInt()
+                .coerceIn(0, 100)
+        } else {
+            0
+        }
+
         return BubbleStatus(
             level = level,
             percent = snapshot.level,
@@ -54,6 +73,10 @@ object BubbleStatusEvaluator {
             plugLabel = snapshot.plugType.label,
             inHomeStretch = approachingLimit || alerts.isNotEmpty(),
             caption = caption,
+            chargeLimitPercent = thresholds.chargeLimitPercent,
+            overheatCelsius = thresholds.overheatCelsius,
+            chargeProgress = chargeProgress,
+            overheatProgress = overheatProgress,
         )
     }
 }

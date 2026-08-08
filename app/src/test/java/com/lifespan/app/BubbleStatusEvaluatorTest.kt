@@ -52,4 +52,21 @@ class BubbleStatusEvaluatorTest {
         val status = BubbleStatusEvaluator.evaluate(snapshot(level = 50, temp = 43.0), AlertThresholds())
         assertEquals(BubbleLevel.DANGER, status.level)
     }
+
+    @Test
+    fun progressBarsReflectThresholds() {
+        // Limit 80, overheat 42.
+        val status = BubbleStatusEvaluator.evaluate(snapshot(level = 40, temp = 21.0), AlertThresholds())
+        assertEquals(50, status.chargeProgress) // 40 of 80
+        assertEquals(50, status.overheatProgress) // 21 of 42
+        assertEquals(80, status.chargeLimitPercent)
+        assertEquals(42.0, status.overheatCelsius, 0.001)
+    }
+
+    @Test
+    fun progressBarsCapAtHundred() {
+        val status = BubbleStatusEvaluator.evaluate(snapshot(level = 100, temp = 60.0), AlertThresholds())
+        assertEquals(100, status.chargeProgress)
+        assertEquals(100, status.overheatProgress)
+    }
 }
