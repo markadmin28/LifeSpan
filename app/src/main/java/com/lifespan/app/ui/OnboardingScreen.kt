@@ -58,7 +58,7 @@ fun OnboardingScreen(
         Spacer(Modifier.height(6.dp))
         Text(
             "Grant a few permissions so LifeSpan can monitor battery health reliably. " +
-                "Everything except notifications is optional — you can change these later in Settings.",
+                "Each permission is optional — you can change these later in Settings.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
         )

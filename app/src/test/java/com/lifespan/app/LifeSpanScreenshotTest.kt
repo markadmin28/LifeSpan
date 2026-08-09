@@ -122,9 +122,9 @@ class LifeSpanScreenshotTest {
         val usage = UsageUiState(
             hasAccess = true,
             apps = listOf(
-                AppUsage("com.maps", "Maps", 45 * 60_000L, snapshot.timestamp, 42.0),
-                AppUsage("com.browser", "Browser", 20 * 60_000L, snapshot.timestamp, 19.0),
-                AppUsage("com.player", "Player", 8 * 60_000L, snapshot.timestamp, 9.0),
+                AppUsage("com.maps", "Maps", 45 * 60_000L, Long.MAX_VALUE, 42.0),
+                AppUsage("com.browser", "Browser", 20 * 60_000L, Long.MAX_VALUE, 19.0),
+                AppUsage("com.player", "Player", 8 * 60_000L, Long.MAX_VALUE, 9.0),
             ),
         )
         captureRoboImage("src/test/screenshots/high_usage.png") {
