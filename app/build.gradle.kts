@@ -3,6 +3,17 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.roborazzi)
+}
+
+roborazzi {
+    // Golden screenshots live in the repo so verifyRoborazziDebug can diff
+    // against them in CI.
+    outputDir.set(file("src/test/screenshots"))
+    compare {
+        // Keep failure diff images out of the golden directory.
+        outputDir.set(file("build/outputs/roborazzi_comparison"))
+    }
 }
 
 android {
@@ -87,6 +98,11 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.arch.core.testing)
     testImplementation(libs.androidx.room.testing)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    debugImplementation(libs.androidx.ui.test.manifest)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)
