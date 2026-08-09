@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import com.lifespan.app.data.BatteryCapacityProvider
 import com.lifespan.app.data.db.LifeSpanDatabase
 import com.lifespan.app.data.prefs.SettingsRepository
 import com.lifespan.app.data.repository.BatteryRepository
@@ -25,6 +26,7 @@ class AppContainer(context: Context) {
     )
     val settingsRepository = SettingsRepository(context)
     val appUsageRepository = AppUsageRepository(context.applicationContext)
+    val batteryCapacityProvider = BatteryCapacityProvider(context.applicationContext)
 }
 
 class LifeSpanApp : Application() {

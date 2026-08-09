@@ -41,6 +41,17 @@ class BatteryRepository(
     fun observeRecentSessions(limit: Int = 50): Flow<List<ChargeSessionEntity>> =
         sessionDao.observeRecent(limit)
 
+    fun observeSession(sessionId: Long): Flow<ChargeSessionEntity?> =
+        sessionDao.observeById(sessionId)
+
+    /** Finished sessions with measured charge, newest first, for capacity estimates. */
+    fun observeCompletedSessions(limit: Int = 60): Flow<List<ChargeSessionEntity>> =
+        sessionDao.observeCompleted(limit)
+
+    /** Per-sample readings logged during one session, oldest first, for charge curves. */
+    fun observeSessionTelemetry(sessionId: Long): Flow<List<TelemetryLogEntity>> =
+        telemetryDao.observeForSession(sessionId)
+
     /** Adopt an already-open session (e.g. after a service restart). */
     suspend fun restoreActiveSession() = mutex.withLock {
         if (activeSessionId != null) return@withLock

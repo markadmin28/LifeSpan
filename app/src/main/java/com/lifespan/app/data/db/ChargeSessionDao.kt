@@ -24,6 +24,19 @@ interface ChargeSessionDao {
     @Query("SELECT * FROM charge_sessions ORDER BY startTime DESC LIMIT :limit")
     fun observeRecent(limit: Int = 50): Flow<List<ChargeSessionEntity>>
 
+    @Query("SELECT * FROM charge_sessions WHERE id = :id")
+    fun observeById(id: Long): Flow<ChargeSessionEntity?>
+
+    /** Finished sessions that measured how much charge went in — the input to capacity estimates. */
+    @Query(
+        """
+        SELECT * FROM charge_sessions
+        WHERE endTime IS NOT NULL AND endLevel IS NOT NULL AND totalMahAdded IS NOT NULL
+        ORDER BY startTime DESC LIMIT :limit
+        """,
+    )
+    fun observeCompleted(limit: Int = 60): Flow<List<ChargeSessionEntity>>
+
     @Query("DELETE FROM charge_sessions")
     suspend fun clear()
 }
