@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thermostat
@@ -49,6 +50,8 @@ import com.lifespan.app.data.prefs.AppSettings
 import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertType
 import com.lifespan.app.domain.battery.TimeEstimator
+import com.lifespan.app.domain.health.BatteryHealthEstimate
+import com.lifespan.app.domain.health.BatteryWearStatus
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.data.db.ChargeSessionEntity
@@ -87,6 +90,7 @@ fun MainScreen(
     onAccentChange: (Accent) -> Unit = {},
     ignoringBatteryOptimizations: Boolean = true,
     onRequestIgnoreBatteryOptimizations: () -> Unit = {},
+    onSessionClick: (ChargeSessionEntity) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -121,6 +125,8 @@ fun MainScreen(
             }
 
             item { BatteryStatusCard(state.snapshot) }
+
+            item { BatteryHealthCard(state.health) }
 
             item {
                 HighUsageCard(
@@ -209,12 +215,91 @@ fun MainScreen(
                 }
             } else {
                 items(state.sessions, key = { it.id }) { session ->
-                    ChargeSessionCard(session)
+                    ChargeSessionCard(session, onClick = { onSessionClick(session) })
                 }
             }
 
             item { Spacer(Modifier.height(24.dp)) }
         }
+    }
+}
+
+@Composable
+private fun BatteryHealthCard(estimate: BatteryHealthEstimate) {
+    val statusColor = when (estimate.wearStatus) {
+        BatteryWearStatus.LEARNING -> MaterialTheme.colorScheme.primary
+        BatteryWearStatus.GOOD -> Ok
+        BatteryWearStatus.WATCH -> Amber
+        BatteryWearStatus.STRESSED -> Danger
+    }
+    val statusLabel = when (estimate.wearStatus) {
+        BatteryWearStatus.LEARNING -> "Learning"
+        BatteryWearStatus.GOOD -> "Good habits"
+        BatteryWearStatus.WATCH -> "Watch heat"
+        BatteryWearStatus.STRESSED -> "Heat stressed"
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.HealthAndSafety, contentDescription = null, tint = statusColor)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Battery health estimate", fontWeight = FontWeight.Bold)
+                    Text(
+                        statusLabel,
+                        color = statusColor,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                HealthMetric(
+                    value = estimate.estimatedFullCapacityMah?.let { "$it mAh" } ?: "—",
+                    label = "Est. full capacity",
+                )
+                HealthMetric(
+                    value = String.format(Locale.US, "%.1f", estimate.equivalentCycles),
+                    label = "Eq. cycles logged",
+                )
+                HealthMetric(
+                    value = estimate.completedSessions.toString(),
+                    label = "Sessions",
+                )
+            }
+            if (estimate.wearStatus == BatteryWearStatus.LEARNING) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Complete a few charge sessions to build an estimate.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                )
+            } else if (estimate.hotSessions > 0) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "${estimate.hotSessions} session(s) reached 40°C or warmer.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = statusColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthMetric(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+        )
     }
 }
 
@@ -682,19 +767,29 @@ private fun ThemeCard(
 }
 
 @Composable
-private fun ChargeSessionCard(session: ChargeSessionEntity) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun ChargeSessionCard(session: ChargeSessionEntity, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    ) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(session.plugType, fontWeight = FontWeight.Bold)
-                Text(
-                    formatTime(session.startTime),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        formatTime(session.startTime),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                    Icon(
+                        Icons.Filled.ChevronRight,
+                        contentDescription = "Open session details",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
             }
             Spacer(Modifier.height(6.dp))
             val end = session.endLevel?.let { "$it%" } ?: "in progress"

@@ -5,12 +5,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifespan.app.LifeSpanApp
 import com.lifespan.app.data.db.ChargeSessionEntity
+import com.lifespan.app.data.db.TelemetryLogEntity
 import com.lifespan.app.data.prefs.Accent
 import com.lifespan.app.data.prefs.AppSettings
 import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertEvaluator
 import com.lifespan.app.domain.alert.AlertThresholds
 import com.lifespan.app.domain.alert.AlertType
+import com.lifespan.app.domain.health.BatteryHealthCalculator
+import com.lifespan.app.domain.health.BatteryHealthEstimate
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.usage.AppUsage
 import com.lifespan.app.domain.usage.UsageRanker
@@ -20,6 +23,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -31,6 +36,7 @@ data class MainUiState(
     val sessions: List<ChargeSessionEntity> = emptyList(),
     val activeAlerts: Set<AlertType> = emptySet(),
     val bubbleEnabled: Boolean = true,
+    val health: BatteryHealthEstimate = BatteryHealthCalculator.calculate(emptyList()),
 )
 
 data class UsageUiState(
@@ -64,6 +70,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             sessions = sessions,
             activeAlerts = snapshot?.let { AlertEvaluator.evaluate(it, thresholds) } ?: emptySet(),
             bubbleEnabled = bubbleEnabled,
+            health = BatteryHealthCalculator.calculate(sessions),
         )
     }.stateIn(
         scope = viewModelScope,
@@ -123,6 +130,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAccent(accent: Accent) = viewModelScope.launch {
         settingsRepository.setAccent(accent)
+    }
+
+    fun completeOnboarding() = viewModelScope.launch {
+        settingsRepository.completeOnboarding()
+    }
+
+    private val _selectedSession = MutableStateFlow<ChargeSessionEntity?>(null)
+    val selectedSession: StateFlow<ChargeSessionEntity?> = _selectedSession.asStateFlow()
+    val sessionTelemetry: StateFlow<List<TelemetryLogEntity>> = _selectedSession
+        .flatMapLatest { session ->
+            session?.let { batteryRepository.observeTelemetryForSession(it.id) } ?: flowOf(emptyList())
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    fun openSession(session: ChargeSessionEntity) {
+        _selectedSession.value = session
+    }
+
+    fun closeSession() {
+        _selectedSession.value = null
     }
 
     private val _usage = MutableStateFlow(UsageUiState())

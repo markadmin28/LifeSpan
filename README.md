@@ -16,7 +16,10 @@ levels, and manages custom charge limits (e.g. an 80% stop alert).
   `battery_telemetry_logs` (with a cascading foreign key) persist every session
   and telemetry sample.
 - **Compose UI**: live battery card (level, temperature, power, current, voltage),
-  start/stop control, configurable thresholds, and charge-session history.
+  history-based capacity/cycle estimates, configurable thresholds, and tappable
+  charge-session history with level, temperature, and current charts.
+- **Guided setup**: a first-run permission screen explains notifications, usage
+  access, the charging bubble, and battery-optimization access before requesting it.
 
 ## Architecture
 MVVM + Clean-ish layering with unidirectional data flow:
@@ -40,6 +43,8 @@ Requires a JDK (17+) and the Android SDK (platform 35, build-tools 35).
 bash scripts/cloud-setup-android.sh
 
 ./gradlew testDebugUnitTest   # run the JVM unit tests
+./gradlew recordRoborazziDebug # record Compose screenshot baselines
+./gradlew verifyRoborazziDebug # compare the UI with committed baselines
 ./gradlew assembleDebug       # build the debug APK (app/build/outputs/apk/debug/)
 ./gradlew lintDebug           # Android lint
 ```
@@ -48,5 +53,6 @@ If you already have an Android SDK, create a `local.properties` with
 `sdk.dir=/path/to/Android/sdk` instead of running the bootstrap script.
 
 ## Permissions
-`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`,
-`FOREGROUND_SERVICE_CONNECTED_DEVICE`, `POST_NOTIFICATIONS`, and `VIBRATE`.
+`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS`,
+`VIBRATE`, `SYSTEM_ALERT_WINDOW`, `PACKAGE_USAGE_STATS`,
+`RECEIVE_BOOT_COMPLETED`, and `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.

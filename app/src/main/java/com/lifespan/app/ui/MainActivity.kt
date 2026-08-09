@@ -3,6 +3,7 @@ package com.lifespan.app.ui
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -21,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -32,22 +34,17 @@ import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
-    private val requestNotifications =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
 
         setContent {
             val vm: MainViewModel = viewModel()
             val state by vm.uiState.collectAsStateWithLifecycle()
             val usage by vm.usage.collectAsStateWithLifecycle()
             val settings by vm.settings.collectAsStateWithLifecycle()
+            val selectedSession by vm.selectedSession.collectAsStateWithLifecycle()
+            val sessionTelemetry by vm.sessionTelemetry.collectAsStateWithLifecycle()
             val context = LocalContext.current
 
             val systemDark = isSystemInDarkTheme()
@@ -60,6 +57,7 @@ class MainActivity : ComponentActivity() {
             LifeSpanTheme(darkTheme = darkTheme, accent = settings.accent) {
                 var canDrawOverlays by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
                 var ignoringBattery by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
+                var notificationsGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
                 var showHighUsage by remember { mutableStateOf(false) }
 
                 val lifecycleOwner = LocalLifecycleOwner.current
@@ -68,6 +66,7 @@ class MainActivity : ComponentActivity() {
                         if (event == Lifecycle.Event.ON_RESUME) {
                             canDrawOverlays = Settings.canDrawOverlays(context)
                             ignoringBattery = isIgnoringBatteryOptimizations(context)
+                            notificationsGranted = hasNotificationPermission(context)
                             vm.refreshUsage()
                         }
                     }
@@ -84,6 +83,9 @@ class MainActivity : ComponentActivity() {
                 val batteryOptLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
                 ) { ignoringBattery = isIgnoringBatteryOptimizations(context) }
+                val notificationLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) { granted -> notificationsGranted = granted }
 
                 val onForceStop: (com.lifespan.app.domain.usage.AppUsage) -> Unit = { app ->
                     vm.killBackground(app.packageName)
@@ -97,7 +99,48 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                if (showHighUsage) {
+                if (!settings.onboardingCompleted) {
+                    OnboardingScreen(
+                        notificationGranted = notificationsGranted,
+                        usageAccessGranted = usage.hasAccess,
+                        overlayGranted = canDrawOverlays,
+                        batteryOptimizationGranted = ignoringBattery,
+                        onRequestNotification = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        },
+                        onRequestUsageAccess = {
+                            usageAccessLauncher.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                        },
+                        onRequestOverlay = {
+                            overlayLauncher.launch(
+                                Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}"),
+                                ),
+                            )
+                        },
+                        onRequestBatteryOptimization = {
+                            runCatching {
+                                batteryOptLauncher.launch(
+                                    Intent(
+                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
+                        },
+                        onComplete = vm::completeOnboarding,
+                    )
+                } else if (selectedSession != null) {
+                    BackHandler { vm.closeSession() }
+                    SessionDetailScreen(
+                        session = selectedSession!!,
+                        telemetry = sessionTelemetry,
+                        onBack = vm::closeSession,
+                    )
+                } else if (showHighUsage) {
                     BackHandler { showHighUsage = false }
                     HighUsageScreen(
                         state = usage,
@@ -156,6 +199,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         },
+                        onSessionClick = vm::openSession,
                     )
                 }
             }
@@ -166,4 +210,11 @@ class MainActivity : ComponentActivity() {
         val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
+
+    private fun hasNotificationPermission(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
 }

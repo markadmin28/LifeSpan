@@ -16,4 +16,5 @@ data class AppSettings(
     val rapidRiseEnabled: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val accent: Accent = Accent.COOL,
+    val onboardingCompleted: Boolean = false,
 )
