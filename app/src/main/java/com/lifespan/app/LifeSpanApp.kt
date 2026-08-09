@@ -8,6 +8,13 @@ import com.lifespan.app.data.db.LifeSpanDatabase
 import com.lifespan.app.data.prefs.SettingsRepository
 import com.lifespan.app.data.repository.BatteryRepository
 import com.lifespan.app.data.usage.AppUsageRepository
+import com.lifespan.app.work.SamplingScheduler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /** Minimal manual dependency container shared across the app process. */
 class AppContainer(context: Context) {
@@ -25,10 +32,23 @@ class LifeSpanApp : Application() {
     lateinit var container: AppContainer
         private set
 
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
         createNotificationChannels()
+
+        // Keep periodic sampling scheduled in sync with the user's preference.
+        appScope.launch {
+            container.settingsRepository.appSettings
+                .map { it.periodicSamplingEnabled }
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    if (enabled) SamplingScheduler.schedule(this@LifeSpanApp)
+                    else SamplingScheduler.cancel(this@LifeSpanApp)
+                }
+        }
     }
 
     private fun createNotificationChannels() {

@@ -1,7 +1,10 @@
 package com.lifespan.app.util
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.media.ToneGenerator
 import android.os.Build
 import android.os.SystemClock
@@ -20,6 +23,7 @@ class AlertManager(
     private val cooldownMillis: Long = 60_000L,
 ) {
     private val lastFired = mutableMapOf<AlertType, Long>()
+    private var alarmPlayer: MediaPlayer? = null
 
     private val vibrator: Vibrator? by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -44,9 +48,37 @@ class AlertManager(
             }
         }
         if (fired) {
-            vibrate(alerts.contains(AlertType.OVERHEAT))
-            playTone(alerts.contains(AlertType.OVERHEAT))
+            val urgent = alerts.contains(AlertType.OVERHEAT) ||
+                alerts.contains(AlertType.RAPID_TEMP_RISE)
+            vibrate(urgent)
+            playTone(urgent)
         }
+    }
+
+    /** Start a looping alarm that persists until [stopPersistentAlarm] is called. */
+    fun startPersistentAlarm() {
+        if (alarmPlayer != null) return
+        runCatching {
+            val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            alarmPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                setDataSource(context, uri)
+                isLooping = true
+                prepare()
+                start()
+            }
+        }
+    }
+
+    fun stopPersistentAlarm() {
+        alarmPlayer?.let { player -> runCatching { player.stop() }; runCatching { player.release() } }
+        alarmPlayer = null
     }
 
     private fun vibrate(urgent: Boolean) {

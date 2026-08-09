@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifespan.app.LifeSpanApp
 import com.lifespan.app.data.db.ChargeSessionEntity
+import com.lifespan.app.data.prefs.Accent
+import com.lifespan.app.data.prefs.AppSettings
+import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertEvaluator
 import com.lifespan.app.domain.alert.AlertThresholds
 import com.lifespan.app.domain.alert.AlertType
@@ -90,6 +93,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setBubbleEnabled(enabled: Boolean) = viewModelScope.launch {
         settingsRepository.setBubbleEnabled(enabled)
+    }
+
+    val settings: StateFlow<AppSettings> = settingsRepository.appSettings.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = AppSettings(),
+    )
+
+    fun setAutoStartEnabled(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setAutoStartEnabled(enabled)
+    }
+
+    fun setPeriodicSamplingEnabled(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setPeriodicSamplingEnabled(enabled)
+    }
+
+    fun setPersistentChargeAlarm(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setPersistentChargeAlarm(enabled)
+    }
+
+    fun setRapidRiseEnabled(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setRapidRiseEnabled(enabled)
+    }
+
+    fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
+        settingsRepository.setThemeMode(mode)
+    }
+
+    fun setAccent(accent: Accent) = viewModelScope.launch {
+        settingsRepository.setAccent(accent)
     }
 
     private val _usage = MutableStateFlow(UsageUiState())

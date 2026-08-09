@@ -16,6 +16,8 @@ data class BatterySnapshot(
     val plugType: PlugType,
     val health: Int = 0,
     val technology: String? = null,
+    /** Remaining battery charge in micro-amp-hours, if the device reports it. */
+    val chargeCounterMicroAh: Long = 0L,
 ) {
     /** Instantaneous current in milliamps (positive = charging on most devices). */
     val currentMa: Double get() = BatteryCalculator.microAmpsToMilliAmps(currentUa)

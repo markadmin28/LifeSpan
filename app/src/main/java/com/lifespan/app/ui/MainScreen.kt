@@ -27,8 +27,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -42,7 +44,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.lifespan.app.data.prefs.Accent
+import com.lifespan.app.data.prefs.AppSettings
+import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertType
+import com.lifespan.app.domain.battery.TimeEstimator
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.data.db.ChargeSessionEntity
@@ -72,6 +78,15 @@ fun MainScreen(
     topUsagePercent: Int? = null,
     highUsageCount: Int = 0,
     onOpenHighUsage: () -> Unit = {},
+    settings: AppSettings = AppSettings(),
+    onAutoStartChange: (Boolean) -> Unit = {},
+    onPeriodicSamplingChange: (Boolean) -> Unit = {},
+    onPersistentAlarmChange: (Boolean) -> Unit = {},
+    onRapidRiseChange: (Boolean) -> Unit = {},
+    onThemeModeChange: (ThemeMode) -> Unit = {},
+    onAccentChange: (Accent) -> Unit = {},
+    ignoringBatteryOptimizations: Boolean = true,
+    onRequestIgnoreBatteryOptimizations: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -139,10 +154,39 @@ fun MainScreen(
             }
 
             item {
+                AlertsExtraCard(
+                    persistentAlarm = settings.persistentChargeAlarm,
+                    rapidRise = settings.rapidRiseEnabled,
+                    onPersistentAlarmChange = onPersistentAlarmChange,
+                    onRapidRiseChange = onRapidRiseChange,
+                )
+            }
+
+            item {
                 BubbleCard(
                     enabled = state.bubbleEnabled,
                     canDrawOverlays = canDrawOverlays,
                     onEnabledChange = onBubbleEnabledChange,
+                )
+            }
+
+            item {
+                ReliabilityCard(
+                    autoStart = settings.autoStartEnabled,
+                    periodicSampling = settings.periodicSamplingEnabled,
+                    ignoringBatteryOptimizations = ignoringBatteryOptimizations,
+                    onAutoStartChange = onAutoStartChange,
+                    onPeriodicSamplingChange = onPeriodicSamplingChange,
+                    onRequestIgnoreBatteryOptimizations = onRequestIgnoreBatteryOptimizations,
+                )
+            }
+
+            item {
+                ThemeCard(
+                    themeMode = settings.themeMode,
+                    accent = settings.accent,
+                    onThemeModeChange = onThemeModeChange,
+                    onAccentChange = onAccentChange,
                 )
             }
 
@@ -191,6 +235,7 @@ private fun AlertBanner(alerts: Set<AlertType>) {
                     when (it) {
                         AlertType.OVERHEAT -> "Overheat protection triggered"
                         AlertType.CHARGE_LIMIT -> "Charge limit reached"
+                        AlertType.RAPID_TEMP_RISE -> "Rapid temperature rise"
                     }
                 },
                 color = Danger,
@@ -260,8 +305,29 @@ private fun BatteryStatusCard(snapshot: BatterySnapshot?) {
                     value = String.format(Locale.US, "%.2f V", snapshot.voltageMv / 1000.0),
                 )
             }
+
+            timeEstimateLabel(snapshot)?.let { estimate ->
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    estimate,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
+}
+
+private fun timeEstimateLabel(snapshot: BatterySnapshot): String? {
+    val minutes = TimeEstimator.estimateMinutes(
+        chargeCounterMicroAh = snapshot.chargeCounterMicroAh,
+        currentMicroA = snapshot.currentUa,
+        levelPercent = snapshot.level,
+        isCharging = snapshot.isCharging,
+    ) ?: return null
+    val formatted = TimeEstimator.formatMinutes(minutes)
+    return if (snapshot.isCharging) "Full in ~$formatted" else "Empty in ~$formatted"
 }
 
 @Composable
@@ -460,6 +526,162 @@ private fun BubbleCard(
 }
 
 @Composable
+private fun SettingSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun AlertsExtraCard(
+    persistentAlarm: Boolean,
+    rapidRise: Boolean,
+    onPersistentAlarmChange: (Boolean) -> Unit,
+    onRapidRiseChange: (Boolean) -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Alerts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            SettingSwitchRow(
+                "Persistent charge alarm",
+                "Loop an alarm at the limit until you unplug",
+                persistentAlarm,
+                onPersistentAlarmChange,
+            )
+            Spacer(Modifier.height(12.dp))
+            SettingSwitchRow(
+                "Rapid temperature-rise alert",
+                "Warn on a fast temperature climb (≈2°C in 5 min)",
+                rapidRise,
+                onRapidRiseChange,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReliabilityCard(
+    autoStart: Boolean,
+    periodicSampling: Boolean,
+    ignoringBatteryOptimizations: Boolean,
+    onAutoStartChange: (Boolean) -> Unit,
+    onPeriodicSamplingChange: (Boolean) -> Unit,
+    onRequestIgnoreBatteryOptimizations: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Reliability", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            SettingSwitchRow(
+                "Auto-start on boot",
+                "Resume monitoring after a restart",
+                autoStart,
+                onAutoStartChange,
+            )
+            Spacer(Modifier.height(12.dp))
+            SettingSwitchRow(
+                "Background sampling",
+                "Log battery about every 15 min via WorkManager",
+                periodicSampling,
+                onPeriodicSamplingChange,
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Battery optimization", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (ignoringBatteryOptimizations) {
+                            "Exempt — background monitoring is reliable"
+                        } else {
+                            "Restricted — may be paused in the background"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (ignoringBatteryOptimizations) Ok else Amber,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                OutlinedButton(
+                    onClick = onRequestIgnoreBatteryOptimizations,
+                    enabled = !ignoringBatteryOptimizations,
+                ) {
+                    Text(if (ignoringBatteryOptimizations) "Exempt" else "Allow")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeCard(
+    themeMode: ThemeMode,
+    accent: Accent,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    onAccentChange: (Accent) -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Theme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Mode",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = themeMode == mode,
+                        onClick = { onThemeModeChange(mode) },
+                        label = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Accent",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = accent == Accent.COOL,
+                    onClick = { onAccentChange(Accent.COOL) },
+                    label = { Text("Cool") },
+                )
+                FilterChip(
+                    selected = accent == Accent.WARM,
+                    onClick = { onAccentChange(Accent.WARM) },
+                    label = { Text("Warm") },
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ChargeSessionCard(session: ChargeSessionEntity) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -500,7 +722,7 @@ private fun formatTime(millis: Long): String =
 @Preview
 @Composable
 private fun MainScreenPreview() {
-    LifeSpanTheme(dynamicColor = false) {
+    LifeSpanTheme {
         MainScreen(
             state = MainUiState(
                 snapshot = BatterySnapshot(

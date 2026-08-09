@@ -16,6 +16,9 @@ enum class AlertType {
 
     /** Battery has reached the user-defined charge limit while charging. */
     CHARGE_LIMIT,
+
+    /** Temperature is rising rapidly over a short window. */
+    RAPID_TEMP_RISE,
 }
 
 /**

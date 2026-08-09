@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lifespan.app.domain.alert.AlertThresholds
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +15,7 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "lifespan_settings")
 
-/** Persists user-configurable alert thresholds using Jetpack DataStore. */
+/** Persists all user settings using Jetpack DataStore. */
 class SettingsRepository(private val context: Context) {
 
     private object Keys {
@@ -23,40 +24,65 @@ class SettingsRepository(private val context: Context) {
         val OVERHEAT_ENABLED = booleanPreferencesKey("overheat_enabled")
         val CHARGE_LIMIT_ENABLED = booleanPreferencesKey("charge_limit_enabled")
         val BUBBLE_ENABLED = booleanPreferencesKey("bubble_enabled")
+        val AUTO_START = booleanPreferencesKey("auto_start_enabled")
+        val PERIODIC_SAMPLING = booleanPreferencesKey("periodic_sampling_enabled")
+        val PERSISTENT_ALARM = booleanPreferencesKey("persistent_charge_alarm")
+        val RAPID_RISE = booleanPreferencesKey("rapid_rise_enabled")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val ACCENT = stringPreferencesKey("accent")
     }
 
-    val thresholds: Flow<AlertThresholds> = context.dataStore.data.map { prefs ->
-        val defaults = AlertThresholds()
-        AlertThresholds(
-            overheatCelsius = prefs[Keys.OVERHEAT_C] ?: defaults.overheatCelsius,
-            chargeLimitPercent = prefs[Keys.CHARGE_LIMIT] ?: defaults.chargeLimitPercent,
-            overheatEnabled = prefs[Keys.OVERHEAT_ENABLED] ?: defaults.overheatEnabled,
-            chargeLimitEnabled = prefs[Keys.CHARGE_LIMIT_ENABLED] ?: defaults.chargeLimitEnabled,
+    val appSettings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
+        val d = AppSettings()
+        AppSettings(
+            thresholds = AlertThresholds(
+                overheatCelsius = prefs[Keys.OVERHEAT_C] ?: d.thresholds.overheatCelsius,
+                chargeLimitPercent = prefs[Keys.CHARGE_LIMIT] ?: d.thresholds.chargeLimitPercent,
+                overheatEnabled = prefs[Keys.OVERHEAT_ENABLED] ?: d.thresholds.overheatEnabled,
+                chargeLimitEnabled = prefs[Keys.CHARGE_LIMIT_ENABLED] ?: d.thresholds.chargeLimitEnabled,
+            ),
+            bubbleEnabled = prefs[Keys.BUBBLE_ENABLED] ?: d.bubbleEnabled,
+            autoStartEnabled = prefs[Keys.AUTO_START] ?: d.autoStartEnabled,
+            periodicSamplingEnabled = prefs[Keys.PERIODIC_SAMPLING] ?: d.periodicSamplingEnabled,
+            persistentChargeAlarm = prefs[Keys.PERSISTENT_ALARM] ?: d.persistentChargeAlarm,
+            rapidRiseEnabled = prefs[Keys.RAPID_RISE] ?: d.rapidRiseEnabled,
+            themeMode = prefs[Keys.THEME_MODE]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
+                ?: d.themeMode,
+            accent = prefs[Keys.ACCENT]?.let { runCatching { Accent.valueOf(it) }.getOrNull() }
+                ?: d.accent,
         )
     }
 
-    suspend fun setChargeLimit(percent: Int) {
-        context.dataStore.edit { it[Keys.CHARGE_LIMIT] = percent.coerceIn(1, 100) }
-    }
+    val thresholds: Flow<AlertThresholds> = appSettings.map { it.thresholds }
+    val bubbleEnabled: Flow<Boolean> = appSettings.map { it.bubbleEnabled }
 
-    suspend fun setOverheatCelsius(celsius: Double) {
-        context.dataStore.edit { it[Keys.OVERHEAT_C] = celsius }
-    }
+    suspend fun setChargeLimit(percent: Int) =
+        edit { it[Keys.CHARGE_LIMIT] = percent.coerceIn(1, 100) }
 
-    suspend fun setOverheatEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.OVERHEAT_ENABLED] = enabled }
-    }
+    suspend fun setOverheatCelsius(celsius: Double) = edit { it[Keys.OVERHEAT_C] = celsius }
 
-    suspend fun setChargeLimitEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.CHARGE_LIMIT_ENABLED] = enabled }
-    }
+    suspend fun setOverheatEnabled(enabled: Boolean) = edit { it[Keys.OVERHEAT_ENABLED] = enabled }
 
-    /** Whether the floating charging bubble overlay is enabled. Defaults to on. */
-    val bubbleEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[Keys.BUBBLE_ENABLED] ?: true
-    }
+    suspend fun setChargeLimitEnabled(enabled: Boolean) =
+        edit { it[Keys.CHARGE_LIMIT_ENABLED] = enabled }
 
-    suspend fun setBubbleEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.BUBBLE_ENABLED] = enabled }
+    suspend fun setBubbleEnabled(enabled: Boolean) = edit { it[Keys.BUBBLE_ENABLED] = enabled }
+
+    suspend fun setAutoStartEnabled(enabled: Boolean) = edit { it[Keys.AUTO_START] = enabled }
+
+    suspend fun setPeriodicSamplingEnabled(enabled: Boolean) =
+        edit { it[Keys.PERIODIC_SAMPLING] = enabled }
+
+    suspend fun setPersistentChargeAlarm(enabled: Boolean) =
+        edit { it[Keys.PERSISTENT_ALARM] = enabled }
+
+    suspend fun setRapidRiseEnabled(enabled: Boolean) = edit { it[Keys.RAPID_RISE] = enabled }
+
+    suspend fun setThemeMode(mode: ThemeMode) = edit { it[Keys.THEME_MODE] = mode.name }
+
+    suspend fun setAccent(accent: Accent) = edit { it[Keys.ACCENT] = accent.name }
+
+    private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
+        context.dataStore.edit(block)
     }
 }

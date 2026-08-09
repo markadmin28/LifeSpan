@@ -1,25 +1,20 @@
 package com.lifespan.app.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import com.lifespan.app.data.prefs.Accent
 
-private val DarkColors = darkColorScheme(
+private val CoolDark = darkColorScheme(
     primary = Sky,
     onPrimary = Color(0xFF04121F),
     primaryContainer = Color(0xFF0B4A6F),
     onPrimaryContainer = Color(0xFFD8F3FF),
     secondary = Violet,
-    onSecondary = Color(0xFF23103A),
     tertiary = Indigo,
-    onTertiary = Color(0xFF10163A),
     background = BgDark,
     surface = SurfaceDark,
     surfaceVariant = SurfaceVariantDark,
@@ -28,15 +23,13 @@ private val DarkColors = darkColorScheme(
     error = Danger,
 )
 
-private val LightColors = lightColorScheme(
+private val CoolLight = lightColorScheme(
     primary = SkyDeep,
     onPrimary = Color.White,
     primaryContainer = Color(0xFFCDEEFF),
     onPrimaryContainer = Color(0xFF04121F),
     secondary = Violet,
-    onSecondary = Color.White,
     tertiary = Indigo,
-    onTertiary = Color.White,
     background = CoolBgLight,
     surface = CoolSurfaceLight,
     surfaceVariant = Color(0xFFE6ECFA),
@@ -45,21 +38,45 @@ private val LightColors = lightColorScheme(
     error = Danger,
 )
 
+private val WarmDark = darkColorScheme(
+    primary = WOrangeSoft,
+    onPrimary = Color(0xFF3A1A00),
+    primaryContainer = Color(0xFF7A3B10),
+    onPrimaryContainer = WCream,
+    secondary = WGold,
+    tertiary = WLightBlue,
+    background = WBgDark,
+    surface = WSurfaceDark,
+    surfaceVariant = Color(0xFF3A2E24),
+    onBackground = WOnDark,
+    onSurface = WOnDark,
+    error = Danger,
+)
+
+private val WarmLight = lightColorScheme(
+    primary = WOrange,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFFFDCC2),
+    onPrimaryContainer = Color(0xFF3A1A00),
+    secondary = WGold,
+    tertiary = WLightBlueDeep,
+    background = WCream,
+    surface = WCreamElevated,
+    surfaceVariant = Color(0xFFF3E4D0),
+    onBackground = WInk,
+    onSurface = WInk,
+    error = Danger,
+)
+
 @Composable
 fun LifeSpanTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Off by default so the brand motif is used instead of the device wallpaper palette.
-    dynamicColor: Boolean = false,
+    accent: Accent = Accent.COOL,
     content: @Composable () -> Unit,
 ) {
-    val context = LocalContext.current
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColors
-        else -> LightColors
+    val colorScheme = when (accent) {
+        Accent.COOL -> if (darkTheme) CoolDark else CoolLight
+        Accent.WARM -> if (darkTheme) WarmDark else WarmLight
     }
 
     MaterialTheme(

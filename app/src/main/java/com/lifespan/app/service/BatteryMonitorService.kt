@@ -16,23 +16,25 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.lifespan.app.LifeSpanApp
 import com.lifespan.app.R
+import com.lifespan.app.data.BatteryReader
 import com.lifespan.app.domain.alert.AlertEvaluator
 import com.lifespan.app.domain.alert.AlertThresholds
 import com.lifespan.app.domain.alert.AlertType
-import com.lifespan.app.domain.battery.BatteryCalculator
+import com.lifespan.app.domain.alert.TemperatureTrendMonitor
+import com.lifespan.app.domain.battery.TimeEstimator
 import com.lifespan.app.domain.bubble.BubbleStatusEvaluator
 import com.lifespan.app.domain.model.BatterySnapshot
-import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.ui.MainActivity
 import com.lifespan.app.util.AlertManager
+import com.lifespan.app.widget.LifeSpanWidgetProvider
 import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
- * Lightweight sticky foreground service that listens for
- * `ACTION_BATTERY_CHANGED`, derives a [BatterySnapshot] (including instantaneous
- * current via [BatteryManager.BATTERY_PROPERTY_CURRENT_NOW]), persists telemetry,
- * evaluates overheat / charge-limit alerts, and keeps a live status notification.
+ * Lightweight sticky foreground service that listens for `ACTION_BATTERY_CHANGED`,
+ * derives a [BatterySnapshot] (including instantaneous current), persists
+ * telemetry, evaluates overheat / charge-limit / rapid-rise alerts, drives the
+ * charging bubble and home-screen widget, and keeps a live status notification.
  */
 class BatteryMonitorService : LifecycleService() {
 
@@ -40,12 +42,19 @@ class BatteryMonitorService : LifecycleService() {
     private lateinit var batteryManager: BatteryManager
     private lateinit var alertManager: AlertManager
     private lateinit var bubble: ChargingBubbleController
+    private val trendMonitor = TemperatureTrendMonitor()
 
     @Volatile
     private var thresholds: AlertThresholds = AlertThresholds()
 
     @Volatile
     private var bubbleEnabled: Boolean = true
+
+    @Volatile
+    private var persistentAlarmEnabled: Boolean = false
+
+    @Volatile
+    private var rapidRiseEnabled: Boolean = true
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -64,12 +73,13 @@ class BatteryMonitorService : LifecycleService() {
         app.container.batteryRepository.setMonitoring(true)
 
         lifecycleScope.launch {
-            app.container.settingsRepository.thresholds.collect { thresholds = it }
-        }
-        lifecycleScope.launch {
-            app.container.settingsRepository.bubbleEnabled.collect { enabled ->
-                bubbleEnabled = enabled
-                if (!enabled) bubble.remove()
+            app.container.settingsRepository.appSettings.collect { settings ->
+                thresholds = settings.thresholds
+                bubbleEnabled = settings.bubbleEnabled
+                persistentAlarmEnabled = settings.persistentChargeAlarm
+                rapidRiseEnabled = settings.rapidRiseEnabled
+                if (!bubbleEnabled) bubble.remove()
+                if (!persistentAlarmEnabled) alertManager.stopPersistentAlarm()
             }
         }
         lifecycleScope.launch { app.container.batteryRepository.restoreActiveSession() }
@@ -84,22 +94,41 @@ class BatteryMonitorService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                alertManager.stopPersistentAlarm()
+                stopSelf()
+                return START_NOT_STICKY
+            }
+
+            ACTION_DISMISS_ALARM -> {
+                alertManager.stopPersistentAlarm()
+            }
         }
         startForeground(app.container.batteryRepository.latest.value, emptySet())
         return START_STICKY
     }
 
     private fun handleBatteryIntent(intent: Intent) {
-        val snapshot = readSnapshot(intent)
+        val snapshot = BatteryReader.fromIntent(intent, batteryManager)
         lifecycleScope.launch { app.container.batteryRepository.record(snapshot) }
 
-        val alerts = AlertEvaluator.evaluate(snapshot, thresholds)
+        val alerts = AlertEvaluator.evaluate(snapshot, thresholds).toMutableSet()
+        if (rapidRiseEnabled && trendMonitor.add(snapshot.timestamp, snapshot.temperatureCelsius)) {
+            alerts += AlertType.RAPID_TEMP_RISE
+        }
+
         if (alerts.isNotEmpty()) alertManager.maybeAlert(alerts)
+
+        if (persistentAlarmEnabled && snapshot.isCharging && AlertType.CHARGE_LIMIT in alerts) {
+            alertManager.startPersistentAlarm()
+        } else if (!snapshot.isCharging || AlertType.CHARGE_LIMIT !in alerts) {
+            alertManager.stopPersistentAlarm()
+        }
+
         startForeground(snapshot, alerts)
         updateBubble(snapshot)
+        LifeSpanWidgetProvider.update(this, snapshot)
     }
 
     private fun updateBubble(snapshot: BatterySnapshot) {
@@ -108,34 +137,6 @@ class BatteryMonitorService : LifecycleService() {
         } else {
             bubble.remove()
         }
-    }
-
-    private fun readSnapshot(intent: Intent): BatterySnapshot {
-        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val voltageMv = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0)
-        val tempTenths = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0)
-        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-        val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
-        val health = intent.getIntExtra(BatteryManager.EXTRA_HEALTH, 0)
-        val technology = intent.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY)
-        val currentUa = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-
-        val isCharging = plugged > 0 ||
-            status == BatteryManager.BATTERY_STATUS_CHARGING ||
-            status == BatteryManager.BATTERY_STATUS_FULL
-
-        return BatterySnapshot(
-            timestamp = System.currentTimeMillis(),
-            level = BatteryCalculator.levelPercent(level, scale),
-            voltageMv = voltageMv,
-            currentUa = currentUa,
-            temperatureCelsius = BatteryCalculator.tenthsCelsiusToCelsius(tempTenths),
-            isCharging = isCharging,
-            plugType = PlugType.fromPluggedExtra(plugged),
-            health = health,
-            technology = technology,
-        )
     }
 
     private fun startForeground(snapshot: BatterySnapshot?, alerts: Set<AlertType>) {
@@ -176,6 +177,7 @@ class BatteryMonitorService : LifecycleService() {
                 append(if (snapshot.isCharging) "Charging (${snapshot.plugType.label})" else "On battery")
                 append("  ·  ")
                 append(ma)
+                timeEstimateLabel(snapshot)?.let { append("  ·  ").append(it) }
                 if (alerts.isNotEmpty()) {
                     append("  ·  ⚠ ")
                     append(alerts.joinToString(", ") { it.readableLabel() })
@@ -183,7 +185,7 @@ class BatteryMonitorService : LifecycleService() {
             }
         }
 
-        return NotificationCompat.Builder(this, LifeSpanApp.CHANNEL_MONITOR)
+        val builder = NotificationCompat.Builder(this, LifeSpanApp.CHANNEL_MONITOR)
             .setSmallIcon(R.drawable.ic_stat_monitor)
             .setContentTitle(title)
             .setContentText(text)
@@ -193,12 +195,38 @@ class BatteryMonitorService : LifecycleService() {
             .setContentIntent(contentIntent)
             .addAction(0, "Stop", stopIntent)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .build()
+
+        if (alertManagerHasAlarm()) {
+            val dismissIntent = PendingIntent.getService(
+                this,
+                2,
+                Intent(this, BatteryMonitorService::class.java).setAction(ACTION_DISMISS_ALARM),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            builder.addAction(0, "Dismiss alarm", dismissIntent)
+        }
+
+        return builder.build()
+    }
+
+    private fun alertManagerHasAlarm(): Boolean =
+        persistentAlarmEnabled && (app.container.batteryRepository.latest.value?.isCharging == true)
+
+    private fun timeEstimateLabel(snapshot: BatterySnapshot): String? {
+        val minutes = TimeEstimator.estimateMinutes(
+            chargeCounterMicroAh = snapshot.chargeCounterMicroAh,
+            currentMicroA = snapshot.currentUa,
+            levelPercent = snapshot.level,
+            isCharging = snapshot.isCharging,
+        ) ?: return null
+        val formatted = TimeEstimator.formatMinutes(minutes)
+        return if (snapshot.isCharging) "full in $formatted" else "empty in $formatted"
     }
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(batteryReceiver) }
         bubble.remove()
+        alertManager.stopPersistentAlarm()
         app.container.batteryRepository.setMonitoring(false)
         super.onDestroy()
     }
@@ -206,6 +234,7 @@ class BatteryMonitorService : LifecycleService() {
     companion object {
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP = "com.lifespan.app.action.STOP_MONITORING"
+        const val ACTION_DISMISS_ALARM = "com.lifespan.app.action.DISMISS_ALARM"
 
         fun start(context: Context) {
             val intent = Intent(context, BatteryMonitorService::class.java)
@@ -223,4 +252,5 @@ class BatteryMonitorService : LifecycleService() {
 private fun AlertType.readableLabel(): String = when (this) {
     AlertType.OVERHEAT -> "Overheat"
     AlertType.CHARGE_LIMIT -> "Charge limit"
+    AlertType.RAPID_TEMP_RISE -> "Rapid heating"
 }
