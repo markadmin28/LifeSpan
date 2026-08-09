@@ -31,6 +31,6 @@ abstract class LifeSpanDatabase : RoomDatabase() {
                 context.applicationContext,
                 LifeSpanDatabase::class.java,
                 DB_NAME,
-            ).fallbackToDestructiveMigration().build()
+            ).fallbackToDestructiveMigration(dropAllTables = true).build()
     }
 }

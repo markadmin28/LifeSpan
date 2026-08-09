@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.BatteryChargingFull
@@ -29,6 +32,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -49,6 +53,8 @@ import com.lifespan.app.data.prefs.AppSettings
 import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertType
 import com.lifespan.app.domain.battery.TimeEstimator
+import com.lifespan.app.domain.health.BatteryGuidanceStatus
+import com.lifespan.app.domain.health.BatteryHealth
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.data.db.ChargeSessionEntity
@@ -87,6 +93,10 @@ fun MainScreen(
     onAccentChange: (Accent) -> Unit = {},
     ignoringBatteryOptimizations: Boolean = true,
     onRequestIgnoreBatteryOptimizations: () -> Unit = {},
+    health: BatteryHealth = BatteryHealth.EMPTY,
+    onOpenSession: (Long) -> Unit = {},
+    onOpenTrends: () -> Unit = {},
+    onReviewSetup: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -121,6 +131,10 @@ fun MainScreen(
             }
 
             item { BatteryStatusCard(state.snapshot) }
+
+            item { BatteryHealthCard(health) }
+
+            item { ChargeTrendsCard(onClick = onOpenTrends) }
 
             item {
                 HighUsageCard(
@@ -178,6 +192,7 @@ fun MainScreen(
                     onAutoStartChange = onAutoStartChange,
                     onPeriodicSamplingChange = onPeriodicSamplingChange,
                     onRequestIgnoreBatteryOptimizations = onRequestIgnoreBatteryOptimizations,
+                    onReviewSetup = onReviewSetup,
                 )
             }
 
@@ -209,7 +224,7 @@ fun MainScreen(
                 }
             } else {
                 items(state.sessions, key = { it.id }) { session ->
-                    ChargeSessionCard(session)
+                    ChargeSessionCard(session, onClick = { onOpenSession(session.id) })
                 }
             }
 
@@ -489,6 +504,43 @@ private fun HighUsageCard(
 }
 
 @Composable
+private fun ChargeTrendsCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.ShowChart,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(30.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Charge trends", fontWeight = FontWeight.Bold)
+                Text(
+                    "7-day and 4-week sessions, energy, cycles and heat",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                )
+            }
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+        }
+    }
+}
+
+@Composable
 private fun BubbleCard(
     enabled: Boolean,
     canDrawOverlays: Boolean,
@@ -586,6 +638,7 @@ private fun ReliabilityCard(
     onAutoStartChange: (Boolean) -> Unit,
     onPeriodicSamplingChange: (Boolean) -> Unit,
     onRequestIgnoreBatteryOptimizations: () -> Unit,
+    onReviewSetup: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -629,6 +682,13 @@ private fun ReliabilityCard(
                 ) {
                     Text(if (ignoringBatteryOptimizations) "Exempt" else "Allow")
                 }
+            }
+            Spacer(Modifier.height(14.dp))
+            OutlinedButton(
+                onClick = onReviewSetup,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Review setup wizard")
             }
         }
     }
@@ -682,8 +742,121 @@ private fun ThemeCard(
 }
 
 @Composable
-private fun ChargeSessionCard(session: ChargeSessionEntity) {
+private fun BatteryHealthCard(health: BatteryHealth) {
     Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text("Battery health", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Best-effort estimate from completed charges",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                health.healthPercent?.let { pct ->
+                    Text(
+                        "$pct%",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = healthColor(pct),
+                    )
+                }
+            }
+
+            health.healthPercent?.let { pct ->
+                Spacer(Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    progress = { (pct / 100f).coerceIn(0f, 1f) },
+                    color = healthColor(pct),
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                HealthStat("Eq. cycles", String.format(Locale.US, "%.1f", health.estimatedCycles))
+                HealthStat(
+                    "Recent cap.",
+                    health.estimatedCapacityMah?.let { "$it mAh" } ?: "—",
+                )
+                HealthStat(
+                    "Est. fade",
+                    health.capacityFadePercent?.let { "~$it%" } ?: "—",
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = healthGuidance(health.guidanceStatus),
+                style = MaterialTheme.typography.bodySmall,
+                color = guidanceColor(health.guidanceStatus),
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = if (health.sampleCount == 1) {
+                    "1 usable session; readings can vary with load and temperature."
+                } else {
+                    "${health.sampleCount} usable sessions; readings can vary with load and temperature."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HealthStat(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+    }
+}
+
+private fun healthColor(percent: Int): Color = when {
+    percent >= 90 -> Ok
+    percent >= 75 -> Amber
+    else -> Danger
+}
+
+private fun healthGuidance(status: BatteryGuidanceStatus): String = when (status) {
+    BatteryGuidanceStatus.COLLECTING_DATA ->
+        "Complete at least 3 charges gaining 10%+ to estimate wear."
+    BatteryGuidanceStatus.STABLE ->
+        "No meaningful fade detected. Limit heat and long stays at 100%."
+    BatteryGuidanceStatus.MODERATE_FADE ->
+        "Some fade detected. Prefer cooler, partial charges when practical."
+    BatteryGuidanceStatus.SIGNIFICANT_FADE ->
+        "Notable fade detected. Watch runtime and consider service if it worsens."
+}
+
+private fun guidanceColor(status: BatteryGuidanceStatus): Color = when (status) {
+    BatteryGuidanceStatus.COLLECTING_DATA -> Amber
+    BatteryGuidanceStatus.STABLE -> Ok
+    BatteryGuidanceStatus.MODERATE_FADE -> Amber
+    BatteryGuidanceStatus.SIGNIFICANT_FADE -> Danger
+}
+
+@Composable
+private fun ChargeSessionCard(session: ChargeSessionEntity, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

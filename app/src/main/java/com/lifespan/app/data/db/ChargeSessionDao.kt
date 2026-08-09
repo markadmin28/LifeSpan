@@ -24,6 +24,9 @@ interface ChargeSessionDao {
     @Query("SELECT * FROM charge_sessions ORDER BY startTime DESC LIMIT :limit")
     fun observeRecent(limit: Int = 50): Flow<List<ChargeSessionEntity>>
 
+    @Query("SELECT * FROM charge_sessions ORDER BY startTime ASC")
+    fun observeAll(): Flow<List<ChargeSessionEntity>>
+
     @Query("DELETE FROM charge_sessions")
     suspend fun clear()
 }

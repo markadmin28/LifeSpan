@@ -28,9 +28,9 @@ MVVM + Clean-ish layering with unidirectional data flow:
 - `ui/` — `MainViewModel` (StateFlow) and Compose Material 3 screens.
 
 ## Tech stack
-- Kotlin 2.0, Jetpack Compose (Material 3), Coroutines/Flow
+- Kotlin 2.3, Jetpack Compose (Material 3), Coroutines/Flow
 - Room, DataStore Preferences
-- AGP 8.7, Gradle 8.11, `minSdk 26` / `target/compileSdk 35`
+- AGP 8.13, Gradle 8.13, `minSdk 26` / `target/compileSdk 35`
 
 ## Building
 Requires a JDK (17+) and the Android SDK (platform 35, build-tools 35).
@@ -40,6 +40,7 @@ Requires a JDK (17+) and the Android SDK (platform 35, build-tools 35).
 bash scripts/cloud-setup-android.sh
 
 ./gradlew testDebugUnitTest   # run the JVM unit tests
+./gradlew verifyRoborazziDebug # verify screenshot goldens
 ./gradlew assembleDebug       # build the debug APK (app/build/outputs/apk/debug/)
 ./gradlew lintDebug           # Android lint
 ```
