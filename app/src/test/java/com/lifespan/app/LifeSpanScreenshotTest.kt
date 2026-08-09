@@ -2,17 +2,23 @@ package com.lifespan.app
 
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.lifespan.app.data.db.ChargeSessionEntity
+import com.lifespan.app.data.db.TelemetryLogEntity
 import com.lifespan.app.data.prefs.Accent
 import com.lifespan.app.data.prefs.AppSettings
 import com.lifespan.app.domain.health.BatteryHealth
+import com.lifespan.app.domain.history.ChartPoint
+import com.lifespan.app.domain.history.ChartSeriesBuilder
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.domain.usage.AppUsage
 import com.lifespan.app.ui.HighUsageScreen
+import com.lifespan.app.ui.HistoryUiState
 import com.lifespan.app.ui.MainScreen
 import com.lifespan.app.ui.MainUiState
+import com.lifespan.app.ui.SessionDetailScreen
 import com.lifespan.app.ui.UsageUiState
 import com.lifespan.app.ui.theme.LifeSpanTheme
+import kotlin.math.sin
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -69,6 +75,40 @@ class LifeSpanScreenshotTest {
         sampleCount = 3,
     )
 
+    /** Deterministic 4-hour telemetry window (one sample every 10 minutes). */
+    private val history: HistoryUiState = run {
+        val start = 1_699_985_600_000L
+        val step = 10L * 60L * 1000L
+        val levels = (0..24).map { i ->
+            ChartPoint(start + i * step, (42.0 + i * 1.6).coerceAtMost(80.0))
+        }
+        val temps = (0..24).map { i ->
+            ChartPoint(start + i * step, 33.0 + 4.0 * sin(i / 5.0) + i * 0.1)
+        }
+        HistoryUiState(
+            levelSeries = ChartSeriesBuilder.build(levels, minValueSpan = 4.0),
+            tempSeries = ChartSeriesBuilder.build(temps, minValueSpan = 2.0),
+            sampleCount = levels.size,
+        )
+    }
+
+    private val sessionLogs: List<TelemetryLogEntity> = run {
+        val start = 1_699_996_400_000L
+        val step = 3L * 60L * 1000L
+        (0..20).map { i ->
+            TelemetryLogEntity(
+                id = i.toLong() + 1,
+                sessionId = 1,
+                timestamp = start + i * step,
+                batteryLevel = 42 + (i * 38) / 20,
+                voltageMv = 4200 + i * 5,
+                currentMa = 2100 - i * 60,
+                temperatureCelsius = 34.0 + 6.0 * sin(i / 6.5),
+                isCharging = true,
+            )
+        }
+    }
+
     @Test
     fun dashboardDark() {
         captureRoboImage("src/test/screenshots/dashboard_dark.png") {
@@ -83,6 +123,7 @@ class LifeSpanScreenshotTest {
                     onOverheatEnabledChange = {},
                     onChargeLimitEnabledChange = {},
                     health = health,
+                    history = history,
                 )
             }
         }
@@ -102,6 +143,20 @@ class LifeSpanScreenshotTest {
                     onOverheatEnabledChange = {},
                     onChargeLimitEnabledChange = {},
                     health = health,
+                    history = history,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun sessionDetail() {
+        captureRoboImage("src/test/screenshots/session_detail.png") {
+            LifeSpanTheme(darkTheme = true, accent = Accent.COOL) {
+                SessionDetailScreen(
+                    session = sessions.first(),
+                    logs = sessionLogs,
+                    onBack = {},
                 )
             }
         }

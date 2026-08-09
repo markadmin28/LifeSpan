@@ -15,6 +15,12 @@ class PlugTypeTest {
     }
 
     @Test
+    fun mapsDockPlugValue() {
+        // BatteryManager.BATTERY_PLUGGED_DOCK (API 33) == 8.
+        assertEquals(PlugType.DOCK, PlugType.fromPluggedExtra(8))
+    }
+
+    @Test
     fun zeroMeansUnplugged() {
         assertEquals(PlugType.UNPLUGGED, PlugType.fromPluggedExtra(0))
     }

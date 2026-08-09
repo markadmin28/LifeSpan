@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -37,9 +38,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +60,7 @@ import com.lifespan.app.domain.alert.AlertType
 import com.lifespan.app.domain.battery.TimeEstimator
 import com.lifespan.app.domain.health.BatteryHealth
 import com.lifespan.app.domain.model.BatterySnapshot
+import com.lifespan.app.domain.model.ReportedHealth
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.data.db.ChargeSessionEntity
 import com.lifespan.app.ui.theme.Amber
@@ -93,7 +100,10 @@ fun MainScreen(
     onRequestIgnoreBatteryOptimizations: () -> Unit = {},
     health: BatteryHealth = BatteryHealth.EMPTY,
     onOpenSession: (Long) -> Unit = {},
+    history: HistoryUiState = HistoryUiState(),
+    onClearHistory: () -> Unit = {},
 ) {
+    var showClearDialog by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -127,6 +137,8 @@ fun MainScreen(
             }
 
             item { BatteryStatusCard(state.snapshot) }
+
+            item { HistoryCard(history) }
 
             item { BatteryHealthCard(health) }
 
@@ -199,12 +211,24 @@ fun MainScreen(
             }
 
             item {
-                Text(
-                    "Charge sessions",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        "Charge sessions",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (state.sessions.isNotEmpty()) {
+                        TextButton(onClick = { showClearDialog = true }) {
+                            Text("Clear history")
+                        }
+                    }
+                }
             }
 
             if (state.sessions.isEmpty()) {
@@ -223,6 +247,27 @@ fun MainScreen(
 
             item { Spacer(Modifier.height(24.dp)) }
         }
+    }
+
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("Clear history?") },
+            text = { Text("This permanently deletes all recorded charge sessions and battery telemetry.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearDialog = false
+                        onClearHistory()
+                    },
+                ) {
+                    Text("Clear", color = Danger, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 
@@ -280,8 +325,21 @@ private fun BatteryStatusCard(snapshot: BatterySnapshot?) {
                         color = if (snapshot.isCharging) Ok else MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    snapshot.technology?.let {
-                        Text(it, style = MaterialTheme.typography.labelSmall)
+                    val healthLabel = ReportedHealth.label(snapshot.health)
+                    val subline = listOfNotNull(
+                        snapshot.technology,
+                        healthLabel?.let { "Health: $it" },
+                    ).joinToString(" · ")
+                    if (subline.isNotEmpty()) {
+                        Text(
+                            subline,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (healthLabel != null && ReportedHealth.isConcerning(snapshot.health)) {
+                                Danger
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            },
+                        )
                     }
                 }
             }
@@ -683,6 +741,57 @@ private fun ThemeCard(
                     selected = accent == Accent.WARM,
                     onClick = { onAccentChange(Accent.WARM) },
                     label = { Text("Warm") },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryCard(history: HistoryUiState) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (history.sampleCount > 0) {
+                    Text(
+                        "last 6 h · ${history.sampleCount} samples",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+            }
+
+            if (!history.hasData) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Charts appear once monitoring has logged a few battery samples.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+                return@Column
+            }
+
+            history.levelSeries?.let { series ->
+                Spacer(Modifier.height(12.dp))
+                TelemetryChart(
+                    title = "Battery level",
+                    series = series,
+                    lineColor = MaterialTheme.colorScheme.primary,
+                    valueFormatter = { String.format(Locale.US, "%.0f%%", it) },
+                )
+            }
+            history.tempSeries?.let { series ->
+                Spacer(Modifier.height(16.dp))
+                TelemetryChart(
+                    title = "Temperature",
+                    series = series,
+                    lineColor = Amber,
+                    valueFormatter = { String.format(Locale.US, "%.1f°C", it) },
                 )
             }
         }

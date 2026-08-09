@@ -83,6 +83,7 @@ class BatteryMonitorService : LifecycleService() {
             }
         }
         lifecycleScope.launch { app.container.batteryRepository.restoreActiveSession() }
+        lifecycleScope.launch { app.container.batteryRepository.pruneOldTelemetry() }
 
         ContextCompat.registerReceiver(
             this,

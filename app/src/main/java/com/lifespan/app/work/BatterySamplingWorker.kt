@@ -24,6 +24,7 @@ class BatterySamplingWorker(
         val app = applicationContext as? LifeSpanApp ?: return Result.success()
         val snapshot = BatteryReader.sample(applicationContext) ?: return Result.success()
         app.container.batteryRepository.record(snapshot)
+        app.container.batteryRepository.pruneOldTelemetry()
         LifeSpanWidgetProvider.update(applicationContext, snapshot)
         return Result.success()
     }

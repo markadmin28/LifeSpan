@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
             val usage by vm.usage.collectAsStateWithLifecycle()
             val settings by vm.settings.collectAsStateWithLifecycle()
             val health by vm.health.collectAsStateWithLifecycle()
+            val history by vm.history.collectAsStateWithLifecycle()
             val selectedSessionId by vm.selectedSessionId.collectAsStateWithLifecycle()
             val sessionLogs by vm.sessionLogs.collectAsStateWithLifecycle()
             val context = LocalContext.current
@@ -201,6 +202,8 @@ class MainActivity : ComponentActivity() {
                             onRequestIgnoreBatteryOptimizations = requestBatteryOpt,
                             health = health,
                             onOpenSession = vm::openSession,
+                            history = history,
+                            onClearHistory = vm::clearHistory,
                         )
                     }
                 }

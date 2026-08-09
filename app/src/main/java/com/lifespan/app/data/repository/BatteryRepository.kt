@@ -24,6 +24,13 @@ class BatteryRepository(
     private val sessionDao: ChargeSessionDao,
     private val telemetryDao: TelemetryLogDao,
 ) {
+    companion object {
+        /** How long raw telemetry samples are kept before being pruned. */
+        const val TELEMETRY_RETENTION_DAYS = 14
+        private const val TELEMETRY_RETENTION_MILLIS =
+            TELEMETRY_RETENTION_DAYS * 24L * 60L * 60L * 1000L
+    }
+
     private val _latest = MutableStateFlow<BatterySnapshot?>(null)
     val latest: StateFlow<BatterySnapshot?> = _latest.asStateFlow()
 
@@ -43,6 +50,22 @@ class BatteryRepository(
 
     fun observeSessionLogs(sessionId: Long): Flow<List<TelemetryLogEntity>> =
         telemetryDao.observeForSession(sessionId)
+
+    fun observeRecentTelemetry(limit: Int = 1_000): Flow<List<TelemetryLogEntity>> =
+        telemetryDao.observeRecent(limit)
+
+    /** Delete telemetry samples older than the retention window. */
+    suspend fun pruneOldTelemetry(now: Long = System.currentTimeMillis()) {
+        telemetryDao.deleteOlderThan(now - TELEMETRY_RETENTION_MILLIS)
+    }
+
+    /** Erase all recorded sessions and telemetry (the active session included). */
+    suspend fun clearHistory() = mutex.withLock {
+        sessionDao.clear()
+        telemetryDao.clearAll()
+        accumulator = null
+        activeSessionId = null
+    }
 
     /** Adopt an already-open session (e.g. after a service restart). */
     suspend fun restoreActiveSession() = mutex.withLock {

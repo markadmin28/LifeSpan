@@ -14,6 +14,9 @@ import com.lifespan.app.domain.alert.AlertThresholds
 import com.lifespan.app.domain.alert.AlertType
 import com.lifespan.app.domain.health.BatteryHealth
 import com.lifespan.app.domain.health.BatteryHealthCalculator
+import com.lifespan.app.domain.history.ChartPoint
+import com.lifespan.app.domain.history.ChartSeries
+import com.lifespan.app.domain.history.ChartSeriesBuilder
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.usage.AppUsage
 import com.lifespan.app.domain.usage.UsageRanker
@@ -39,6 +42,14 @@ data class MainUiState(
     val activeAlerts: Set<AlertType> = emptySet(),
     val bubbleEnabled: Boolean = true,
 )
+
+data class HistoryUiState(
+    val levelSeries: ChartSeries? = null,
+    val tempSeries: ChartSeries? = null,
+    val sampleCount: Int = 0,
+) {
+    val hasData: Boolean get() = levelSeries != null || tempSeries != null
+}
 
 data class UsageUiState(
     val hasAccess: Boolean = false,
@@ -85,6 +96,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = BatteryHealth.EMPTY,
         )
+
+    /** Rolling telemetry window rendered as the dashboard history chart. */
+    val history: StateFlow<HistoryUiState> = batteryRepository
+        .observeRecentTelemetry(limit = HISTORY_FETCH_LIMIT)
+        .map { logs ->
+            val levels = ChartSeriesBuilder.windowByLatest(
+                logs.map { ChartPoint(it.timestamp, it.batteryLevel.toDouble()) },
+                HISTORY_WINDOW_MILLIS,
+            )
+            val temps = ChartSeriesBuilder.windowByLatest(
+                logs.map { ChartPoint(it.timestamp, it.temperatureCelsius) },
+                HISTORY_WINDOW_MILLIS,
+            )
+            HistoryUiState(
+                levelSeries = ChartSeriesBuilder.build(levels, minValueSpan = 4.0),
+                tempSeries = ChartSeriesBuilder.build(temps, minValueSpan = 2.0),
+                sampleCount = levels.size,
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = HistoryUiState(),
+        )
+
+    /** Erase all recorded charge sessions and telemetry. */
+    fun clearHistory() = viewModelScope.launch {
+        batteryRepository.clearHistory()
+    }
 
     private val _selectedSessionId = MutableStateFlow<Long?>(null)
     val selectedSessionId: StateFlow<Long?> = _selectedSessionId.asStateFlow()
@@ -185,4 +225,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Best-effort stop of a package's background processes. */
     fun killBackground(packageName: String) = appUsageRepository.killBackground(packageName)
+
+    companion object {
+        /** How much recent telemetry to fetch for the dashboard chart. */
+        private const val HISTORY_FETCH_LIMIT = 1_500
+
+        /** Rolling window rendered by the dashboard history chart. */
+        private const val HISTORY_WINDOW_MILLIS = 6L * 60L * 60L * 1000L
+    }
 }

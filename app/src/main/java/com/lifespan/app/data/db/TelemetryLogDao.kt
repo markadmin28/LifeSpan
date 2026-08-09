@@ -19,4 +19,10 @@ interface TelemetryLogDao {
 
     @Query("SELECT * FROM battery_telemetry_logs ORDER BY timestamp DESC LIMIT :limit")
     fun observeRecent(limit: Int = 200): Flow<List<TelemetryLogEntity>>
+
+    @Query("DELETE FROM battery_telemetry_logs WHERE timestamp < :cutoff")
+    suspend fun deleteOlderThan(cutoff: Long): Int
+
+    @Query("DELETE FROM battery_telemetry_logs")
+    suspend fun clearAll()
 }
