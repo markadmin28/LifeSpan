@@ -196,7 +196,7 @@ class BatteryMonitorService : LifecycleService() {
             .addAction(0, "Stop", stopIntent)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
 
-        if (alertManagerHasAlarm()) {
+        if (alertManager.persistentAlarmActive) {
             val dismissIntent = PendingIntent.getService(
                 this,
                 2,
@@ -208,9 +208,6 @@ class BatteryMonitorService : LifecycleService() {
 
         return builder.build()
     }
-
-    private fun alertManagerHasAlarm(): Boolean =
-        persistentAlarmEnabled && (app.container.batteryRepository.latest.value?.isCharging == true)
 
     private fun timeEstimateLabel(snapshot: BatterySnapshot): String? {
         val minutes = TimeEstimator.estimateMinutes(

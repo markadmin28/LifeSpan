@@ -25,6 +25,9 @@ class AlertManager(
     private val lastFired = mutableMapOf<AlertType, Long>()
     private var alarmPlayer: MediaPlayer? = null
 
+    val persistentAlarmActive: Boolean
+        get() = alarmPlayer != null
+
     private val vibrator: Vibrator? by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
