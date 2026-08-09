@@ -17,6 +17,15 @@ levels, and manages custom charge limits (e.g. an 80% stop alert).
   and telemetry sample.
 - **Compose UI**: live battery card (level, temperature, power, current, voltage),
   start/stop control, configurable thresholds, and charge-session history.
+- **Battery health card**: OS-reported health status, estimated vs design
+  capacity (via the charge counter and `PowerProfile`), equivalent full charge
+  cycles, and thermal-stress stats aggregated from session history.
+- **Session detail charts**: tap any charge session for battery-level,
+  temperature, and current line charts with charge-rate (%/hr) and
+  temperature-trend (°C/10 min) callouts.
+- **Onboarding wizard**: skippable first-run walkthrough for the notification,
+  usage-access, overlay, and battery-optimization permissions with live
+  granted indicators.
 
 ## Architecture
 MVVM + Clean-ish layering with unidirectional data flow:
@@ -39,10 +48,15 @@ Requires a JDK (17+) and the Android SDK (platform 35, build-tools 35).
 # One-time toolchain bootstrap (installs the SDK + writes local.properties)
 bash scripts/cloud-setup-android.sh
 
-./gradlew testDebugUnitTest   # run the JVM unit tests
-./gradlew assembleDebug       # build the debug APK (app/build/outputs/apk/debug/)
-./gradlew lintDebug           # Android lint
+./gradlew testDebugUnitTest      # run the JVM unit tests
+./gradlew verifyRoborazziDebug   # screenshot tests (compare against goldens)
+./gradlew recordRoborazziDebug   # re-record golden screenshots after UI changes
+./gradlew assembleDebug          # build the debug APK (app/build/outputs/apk/debug/)
+./gradlew lintDebug              # Android lint
 ```
+
+Golden screenshots live in `app/src/test/screenshots/` and are verified in CI
+(Roborazzi renders them on the JVM via Robolectric native graphics).
 
 If you already have an Android SDK, create a `local.properties` with
 `sdk.dir=/path/to/Android/sdk` instead of running the bootstrap script.
