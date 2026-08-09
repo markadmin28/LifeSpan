@@ -56,6 +56,15 @@ android {
     }
 }
 
+// Opt in with `-Dlifespan.captureScreenshots=true` to have the render tests also
+// write PNGs of each screen to app/build/screenshots.
+tasks.withType<Test>().configureEach {
+    systemProperty(
+        "lifespan.captureScreenshots",
+        System.getProperty("lifespan.captureScreenshots") ?: "false",
+    )
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -87,6 +96,13 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.arch.core.testing)
     testImplementation(libs.androidx.room.testing)
+
+    // Renders the Compose screens on the JVM so the UI can be asserted and
+    // captured without a device.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.androidx.junit)
+    debugImplementation(libs.androidx.ui.test.manifest)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)
