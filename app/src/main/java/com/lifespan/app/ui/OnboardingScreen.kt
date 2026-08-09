@@ -43,12 +43,16 @@ fun OnboardingScreen(
     onRequestBatteryOptimization: () -> Unit,
     onComplete: () -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
     ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         item { Spacer(Modifier.height(28.dp)) }
         item {
             Surface(
@@ -130,7 +134,8 @@ fun OnboardingScreen(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
-        item { Spacer(Modifier.height(24.dp)) }
+            item { Spacer(Modifier.height(24.dp)) }
+        }
     }
 }
 
