@@ -2,7 +2,10 @@ package com.lifespan.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
@@ -99,6 +102,35 @@ class LifeSpanScreenshotTest {
                 onFinish = {},
             )
         }
+    }
+
+    @Test
+    fun onboardingNotificationsStep() {
+        composeRule.setContent {
+            LifeSpanTheme(darkTheme = false, accent = Accent.COOL) {
+                OnboardingScreen(
+                    permissions = OnboardingPermissions(
+                        notificationsGranted = false,
+                        notificationsSupported = true,
+                        usageAccessGranted = false,
+                        overlayGranted = false,
+                        batteryOptimizationExempt = false,
+                    ),
+                    onRequestNotifications = {},
+                    onRequestUsageAccess = {},
+                    onRequestOverlay = {},
+                    onRequestBatteryExemption = {},
+                    onFinish = {},
+                )
+            }
+        }
+        // Navigate from the welcome step to the notifications permission step.
+        composeRule.onNodeWithText("Next").performClick()
+        composeRule.onNodeWithText("Allow notifications").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage(
+            filePath = "src/test/screenshots/onboarding_notifications_step.png",
+            roborazziOptions = roborazziOptions,
+        )
     }
 
     @Test
