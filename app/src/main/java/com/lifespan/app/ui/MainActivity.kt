@@ -3,6 +3,7 @@ package com.lifespan.app.ui
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -14,13 +15,19 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -32,22 +39,25 @@ import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
+    private val notificationsGrantedState = mutableStateOf(false)
+
     private val requestNotifications =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            notificationsGrantedState.value = granted
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        notificationsGrantedState.value = notificationsGranted(this)
 
         setContent {
             val vm: MainViewModel = viewModel()
             val state by vm.uiState.collectAsStateWithLifecycle()
             val usage by vm.usage.collectAsStateWithLifecycle()
             val settings by vm.settings.collectAsStateWithLifecycle()
+            val health by vm.health.collectAsStateWithLifecycle()
             val context = LocalContext.current
 
             val systemDark = isSystemInDarkTheme()
@@ -61,6 +71,9 @@ class MainActivity : ComponentActivity() {
                 var canDrawOverlays by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
                 var ignoringBattery by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
                 var showHighUsage by remember { mutableStateOf(false) }
+                val sessionDetail by vm.sessionDetail.collectAsStateWithLifecycle()
+                val onboardingComplete by vm.onboardingComplete.collectAsStateWithLifecycle()
+                val notificationsGranted by notificationsGrantedState
 
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
@@ -68,6 +81,7 @@ class MainActivity : ComponentActivity() {
                         if (event == Lifecycle.Event.ON_RESUME) {
                             canDrawOverlays = Settings.canDrawOverlays(context)
                             ignoringBattery = isIgnoringBatteryOptimizations(context)
+                            notificationsGrantedState.value = notificationsGranted(context)
                             vm.refreshUsage()
                         }
                     }
@@ -97,7 +111,58 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                if (showHighUsage) {
+                if (onboardingComplete == null) {
+                    // Settings still loading; avoid flashing the wizard.
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                    )
+                } else if (onboardingComplete == false) {
+                    OnboardingScreen(
+                        permissions = OnboardingPermissions(
+                            notificationsGranted = notificationsGranted,
+                            notificationsSupported =
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
+                            usageAccessGranted = usage.hasAccess,
+                            overlayGranted = canDrawOverlays,
+                            batteryOptimizationExempt = ignoringBattery,
+                        ),
+                        onRequestNotifications = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        },
+                        onRequestUsageAccess = {
+                            usageAccessLauncher.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                        },
+                        onRequestOverlay = {
+                            overlayLauncher.launch(
+                                Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}"),
+                                ),
+                            )
+                        },
+                        onRequestBatteryExemption = {
+                            runCatching {
+                                batteryOptLauncher.launch(
+                                    Intent(
+                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
+                        },
+                        onFinish = vm::completeOnboarding,
+                    )
+                } else if (sessionDetail != null) {
+                    BackHandler { vm.closeSessionDetail() }
+                    SessionDetailScreen(
+                        state = sessionDetail!!,
+                        onBack = vm::closeSessionDetail,
+                    )
+                } else if (showHighUsage) {
                     BackHandler { showHighUsage = false }
                     HighUsageScreen(
                         state = usage,
@@ -108,6 +173,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     MainScreen(
                         state = state,
+                        health = health,
                         settings = settings,
                         onStart = vm::startMonitoring,
                         onStop = vm::stopMonitoring,
@@ -145,6 +211,7 @@ class MainActivity : ComponentActivity() {
                         onRapidRiseChange = vm::setRapidRiseEnabled,
                         onThemeModeChange = vm::setThemeMode,
                         onAccentChange = vm::setAccent,
+                        onSessionClick = { session -> vm.openSession(session.id) },
                         ignoringBatteryOptimizations = ignoringBattery,
                         onRequestIgnoreBatteryOptimizations = {
                             runCatching {
@@ -166,4 +233,11 @@ class MainActivity : ComponentActivity() {
         val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
+
+    private fun notificationsGranted(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
 }

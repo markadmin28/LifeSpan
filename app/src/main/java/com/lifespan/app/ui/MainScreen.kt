@@ -67,6 +67,7 @@ fun MainScreen(
     state: MainUiState,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    health: HealthUiState = HealthUiState(),
     onChargeLimitChange: (Int) -> Unit,
     onOverheatChange: (Double) -> Unit,
     onOverheatEnabledChange: (Boolean) -> Unit,
@@ -87,6 +88,7 @@ fun MainScreen(
     onAccentChange: (Accent) -> Unit = {},
     ignoringBatteryOptimizations: Boolean = true,
     onRequestIgnoreBatteryOptimizations: () -> Unit = {},
+    onSessionClick: (ChargeSessionEntity) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -121,6 +123,8 @@ fun MainScreen(
             }
 
             item { BatteryStatusCard(state.snapshot) }
+
+            item { BatteryHealthCard(health) }
 
             item {
                 HighUsageCard(
@@ -209,7 +213,7 @@ fun MainScreen(
                 }
             } else {
                 items(state.sessions, key = { it.id }) { session ->
-                    ChargeSessionCard(session)
+                    ChargeSessionCard(session, onClick = { onSessionClick(session) })
                 }
             }
 
@@ -682,29 +686,44 @@ private fun ThemeCard(
 }
 
 @Composable
-private fun ChargeSessionCard(session: ChargeSessionEntity) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(session.plugType, fontWeight = FontWeight.Bold)
+private fun ChargeSessionCard(session: ChargeSessionEntity, onClick: () -> Unit = {}) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(session.plugType, fontWeight = FontWeight.Bold)
+                    Text(
+                        formatTime(session.startTime),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                val end = session.endLevel?.let { "$it%" } ?: "in progress"
+                Text("Level: ${session.startLevel}% → $end")
                 Text(
-                    formatTime(session.startTime),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    "Peak ${String.format(Locale.US, "%.1f°C", session.peakTempCelsius)} · " +
+                        "${String.format(Locale.US, "%.0f mA", session.peakCurrentMa)} · " +
+                        (session.totalMahAdded?.let { String.format(Locale.US, "%.0f mAh added", it) } ?: "—"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            val end = session.endLevel?.let { "$it%" } ?: "in progress"
-            Text("Level: ${session.startLevel}% → $end")
-            Text(
-                "Peak ${String.format(Locale.US, "%.1f°C", session.peakTempCelsius)} · " +
-                    "${String.format(Locale.US, "%.0f mA", session.peakCurrentMa)} · " +
-                    (session.totalMahAdded?.let { String.format(Locale.US, "%.0f mAh added", it) } ?: "—"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = "Open session details",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             )
         }
     }

@@ -11,15 +11,22 @@ import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertEvaluator
 import com.lifespan.app.domain.alert.AlertThresholds
 import com.lifespan.app.domain.alert.AlertType
+import com.lifespan.app.domain.health.BatteryHealthCalculator
+import com.lifespan.app.domain.health.ChargeStats
+import com.lifespan.app.domain.health.HealthStatus
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.usage.AppUsage
 import com.lifespan.app.domain.usage.UsageRanker
 import com.lifespan.app.service.BatteryMonitorService
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -32,6 +39,16 @@ data class MainUiState(
     val activeAlerts: Set<AlertType> = emptySet(),
     val bubbleEnabled: Boolean = true,
 )
+
+data class HealthUiState(
+    val status: HealthStatus = HealthStatus.UNKNOWN,
+    val estimatedCapacityMah: Double? = null,
+    val designCapacityMah: Double? = null,
+    val capacityPercent: Int? = null,
+    val stats: ChargeStats = ChargeStats(),
+) {
+    val cycles: Double get() = BatteryHealthCalculator.equivalentFullCycles(stats.percentAdded)
+}
 
 data class UsageUiState(
     val hasAccess: Boolean = false,
@@ -49,6 +66,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val batteryRepository = container.batteryRepository
     private val settingsRepository = container.settingsRepository
     private val appUsageRepository = container.appUsageRepository
+    private val designCapacityReader = container.designCapacityReader
 
     val uiState: StateFlow<MainUiState> = combine(
         batteryRepository.latest,
@@ -70,6 +88,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = MainUiState(),
     )
+
+    val health: StateFlow<HealthUiState> = combine(
+        batteryRepository.latest,
+        batteryRepository.observeChargeStats(),
+    ) { snapshot, stats ->
+        val estimated = snapshot?.let {
+            BatteryHealthCalculator.estimateFullCapacityMah(it.chargeCounterMicroAh, it.level)
+        }
+        val design = designCapacityReader.designCapacityMah
+        HealthUiState(
+            status = HealthStatus.fromAndroidValue(snapshot?.health ?: 0),
+            estimatedCapacityMah = estimated,
+            designCapacityMah = design,
+            capacityPercent = BatteryHealthCalculator.capacityPercentOfDesign(estimated, design),
+            stats = stats,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = HealthUiState(),
+    )
+
+    private val selectedSessionId = MutableStateFlow<Long?>(null)
+
+    /** Detail state for the tapped charge session, or null when none is open. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val sessionDetail: StateFlow<SessionDetailUiState?> = selectedSessionId
+        .flatMapLatest { id ->
+            if (id == null) {
+                flowOf(null)
+            } else {
+                combine(
+                    batteryRepository.observeSession(id),
+                    batteryRepository.observeTelemetryForSession(id),
+                ) { session, telemetry -> SessionDetailUiState(session, telemetry) }
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = null,
+        )
+
+    fun openSession(id: Long) {
+        selectedSessionId.value = id
+    }
+
+    fun closeSessionDetail() {
+        selectedSessionId.value = null
+    }
 
     fun startMonitoring() = BatteryMonitorService.start(getApplication())
 
@@ -100,6 +168,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = AppSettings(),
     )
+
+    /**
+     * Whether the first-run wizard has been completed; null until the
+     * persisted value is loaded so the UI can avoid flashing the wizard.
+     */
+    val onboardingComplete: StateFlow<Boolean?> = settingsRepository.appSettings
+        .map { it.onboardingComplete }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = null,
+        )
+
+    fun completeOnboarding() = viewModelScope.launch {
+        settingsRepository.setOnboardingComplete(true)
+    }
 
     fun setAutoStartEnabled(enabled: Boolean) = viewModelScope.launch {
         settingsRepository.setAutoStartEnabled(enabled)

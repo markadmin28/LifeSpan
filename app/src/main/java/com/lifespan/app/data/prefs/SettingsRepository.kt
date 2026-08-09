@@ -30,6 +30,7 @@ class SettingsRepository(private val context: Context) {
         val RAPID_RISE = booleanPreferencesKey("rapid_rise_enabled")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val ACCENT = stringPreferencesKey("accent")
+        val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
     }
 
     val appSettings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -50,6 +51,7 @@ class SettingsRepository(private val context: Context) {
                 ?: d.themeMode,
             accent = prefs[Keys.ACCENT]?.let { runCatching { Accent.valueOf(it) }.getOrNull() }
                 ?: d.accent,
+            onboardingComplete = prefs[Keys.ONBOARDING_COMPLETE] ?: d.onboardingComplete,
         )
     }
 
@@ -81,6 +83,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setThemeMode(mode: ThemeMode) = edit { it[Keys.THEME_MODE] = mode.name }
 
     suspend fun setAccent(accent: Accent) = edit { it[Keys.ACCENT] = accent.name }
+
+    suspend fun setOnboardingComplete(complete: Boolean) =
+        edit { it[Keys.ONBOARDING_COMPLETE] = complete }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.dataStore.edit(block)

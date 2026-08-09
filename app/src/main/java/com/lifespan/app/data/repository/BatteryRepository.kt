@@ -4,12 +4,15 @@ import com.lifespan.app.data.db.ChargeSessionDao
 import com.lifespan.app.data.db.ChargeSessionEntity
 import com.lifespan.app.data.db.TelemetryLogDao
 import com.lifespan.app.data.db.TelemetryLogEntity
+import com.lifespan.app.domain.health.BatteryHealthCalculator
+import com.lifespan.app.domain.health.ChargeStats
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.session.SessionAccumulator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.abs
@@ -40,6 +43,26 @@ class BatteryRepository(
 
     fun observeRecentSessions(limit: Int = 50): Flow<List<ChargeSessionEntity>> =
         sessionDao.observeRecent(limit)
+
+    fun observeSession(id: Long): Flow<ChargeSessionEntity?> = sessionDao.observeById(id)
+
+    fun observeTelemetryForSession(id: Long): Flow<List<TelemetryLogEntity>> =
+        telemetryDao.observeForSession(id)
+
+    /** Aggregate charge-history statistics feeding the battery-health card. */
+    fun observeChargeStats(
+        hotThresholdCelsius: Double = BatteryHealthCalculator.HOT_SESSION_CELSIUS,
+    ): Flow<ChargeStats> =
+        sessionDao.observeStats(hotThresholdCelsius).map { row ->
+            ChargeStats(
+                sessionCount = row.sessionCount,
+                percentAdded = row.percentAdded ?: 0L,
+                mahAdded = row.mahAdded ?: 0.0,
+                avgPeakTempCelsius = row.avgPeakTemp,
+                maxPeakTempCelsius = row.maxPeakTemp,
+                hotSessionCount = row.hotCount,
+            )
+        }
 
     /** Adopt an already-open session (e.g. after a service restart). */
     suspend fun restoreActiveSession() = mutex.withLock {
