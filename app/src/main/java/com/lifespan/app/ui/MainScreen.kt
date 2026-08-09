@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thermostat
@@ -29,10 +31,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -40,6 +44,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -49,6 +54,11 @@ import com.lifespan.app.data.prefs.AppSettings
 import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertType
 import com.lifespan.app.domain.battery.TimeEstimator
+import com.lifespan.app.domain.health.BatteryHealthEstimate
+import com.lifespan.app.domain.health.BatteryHealthEstimator
+import com.lifespan.app.domain.health.CapacityObservation
+import com.lifespan.app.domain.health.ReportedHealth
+import com.lifespan.app.domain.health.WearGrade
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.data.db.ChargeSessionEntity
@@ -87,6 +97,8 @@ fun MainScreen(
     onAccentChange: (Accent) -> Unit = {},
     ignoringBatteryOptimizations: Boolean = true,
     onRequestIgnoreBatteryOptimizations: () -> Unit = {},
+    health: BatteryHealthEstimate = BatteryHealthEstimate(),
+    onSessionClick: (ChargeSessionEntity) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -121,6 +133,8 @@ fun MainScreen(
             }
 
             item { BatteryStatusCard(state.snapshot) }
+
+            item { BatteryHealthCard(health) }
 
             item {
                 HighUsageCard(
@@ -191,12 +205,20 @@ fun MainScreen(
             }
 
             item {
-                Text(
-                    "Charge sessions",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
+                Column(Modifier.padding(top = 6.dp)) {
+                    Text(
+                        "Charge sessions",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (state.sessions.isNotEmpty()) {
+                        Text(
+                            "Tap a session for its charge curve",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                }
             }
 
             if (state.sessions.isEmpty()) {
@@ -209,7 +231,7 @@ fun MainScreen(
                 }
             } else {
                 items(state.sessions, key = { it.id }) { session ->
-                    ChargeSessionCard(session)
+                    ChargeSessionCard(session = session, onClick = { onSessionClick(session) })
                 }
             }
 
@@ -318,6 +340,158 @@ private fun BatteryStatusCard(snapshot: BatterySnapshot?) {
         }
     }
 }
+
+@Composable
+private fun BatteryHealthCard(health: BatteryHealthEstimate) {
+    val accent = gradeColor(health.grade)
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.MonitorHeart, contentDescription = null, tint = accent)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Battery lifespan", fontWeight = FontWeight.Bold)
+                }
+                health.grade?.let { HealthPill(label = it.label.uppercase(Locale.US), color = accent) }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            when {
+                health.statePercent != null -> {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            "${health.statePercent}%",
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = accent,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "of original capacity",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                            modifier = Modifier.padding(bottom = 6.dp),
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    LinearProgressIndicator(
+                        progress = { (health.statePercent / 100f).coerceIn(0f, 1f) },
+                        color = accent,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape),
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        "${formatMah(health.measuredCapacityMah)} measured · " +
+                            "${formatMah(health.designCapacityMah)} when new",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    )
+                    health.lostCapacityMah?.takeIf { it >= 1.0 }?.let { lost ->
+                        Text(
+                            "≈${formatMah(lost)} lost to wear",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                }
+
+                health.hasEstimate -> {
+                    Text(
+                        formatMah(health.measuredCapacityMah),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Measured full-charge capacity. This device does not expose its factory " +
+                            "rating, so wear cannot be shown as a percentage.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                }
+
+                else -> {
+                    Text("Collecting data", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Charge through at least ${BatteryHealthEstimator.MIN_LEVEL_DELTA_PERCENT}% " +
+                            "with monitoring running and LifeSpan will work out how much capacity " +
+                            "your battery really holds.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    if (health.sampleCount > 0) {
+                        "${health.confidence.label} · ${health.sampleCount} " +
+                            if (health.sampleCount == 1) "session" else "sessions"
+                    } else {
+                        health.confidence.label
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+                if (health.reportedHealth.isProblem) {
+                    HealthPill(label = health.reportedHealth.label, color = Danger)
+                } else {
+                    Text(
+                        "Reported: ${health.reportedHealth.label}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthPill(label: String, color: Color) {
+    Surface(color = color.copy(alpha = 0.18f), shape = CircleShape) {
+        Text(
+            label,
+            color = color,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+        )
+    }
+}
+
+@Composable
+private fun gradeColor(grade: WearGrade?): Color = when (grade) {
+    WearGrade.EXCELLENT, WearGrade.GOOD -> Ok
+    WearGrade.FAIR -> Amber
+    WearGrade.WORN -> Danger
+    null -> MaterialTheme.colorScheme.primary
+}
+
+private fun formatMah(value: Double?): String =
+    value?.let { String.format(Locale.US, "%,.0f mAh", it) } ?: "—"
 
 private fun timeEstimateLabel(snapshot: BatterySnapshot): String? {
     val minutes = TimeEstimator.estimateMinutes(
@@ -682,29 +856,43 @@ private fun ThemeCard(
 }
 
 @Composable
-private fun ChargeSessionCard(session: ChargeSessionEntity) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(session.plugType, fontWeight = FontWeight.Bold)
+private fun ChargeSessionCard(session: ChargeSessionEntity, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(session.plugType, fontWeight = FontWeight.Bold)
+                    Text(
+                        formatTime(session.startTime),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                val end = session.endLevel?.let { "$it%" } ?: "in progress"
+                Text("Level: ${session.startLevel}% → $end")
                 Text(
-                    formatTime(session.startTime),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    "Peak ${String.format(Locale.US, "%.1f°C", session.peakTempCelsius)} · " +
+                        "${String.format(Locale.US, "%.0f mA", session.peakCurrentMa)} · " +
+                        (session.totalMahAdded?.let { String.format(Locale.US, "%.0f mAh added", it) } ?: "—"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            val end = session.endLevel?.let { "$it%" } ?: "in progress"
-            Text("Level: ${session.startLevel}% → $end")
-            Text(
-                "Peak ${String.format(Locale.US, "%.1f°C", session.peakTempCelsius)} · " +
-                    "${String.format(Locale.US, "%.0f mA", session.peakCurrentMa)} · " +
-                    (session.totalMahAdded?.let { String.format(Locale.US, "%.0f mAh added", it) } ?: "—"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             )
         }
     }
@@ -756,6 +944,15 @@ private fun MainScreenPreview() {
             onOverheatChange = {},
             onOverheatEnabledChange = {},
             onChargeLimitEnabledChange = {},
+            health = BatteryHealthEstimator.estimate(
+                observations = listOf(
+                    CapacityObservation(levelDeltaPercent = 44, mahAdded = 1800.0),
+                    CapacityObservation(levelDeltaPercent = 38, mahAdded = 1560.0),
+                    CapacityObservation(levelDeltaPercent = 52, mahAdded = 2120.0),
+                ),
+                designCapacityMah = 4500.0,
+                reportedHealth = ReportedHealth.GOOD,
+            ),
         )
     }
 }

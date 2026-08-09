@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
             val state by vm.uiState.collectAsStateWithLifecycle()
             val usage by vm.usage.collectAsStateWithLifecycle()
             val settings by vm.settings.collectAsStateWithLifecycle()
+            val health by vm.health.collectAsStateWithLifecycle()
+            val sessionDetail by vm.sessionDetail.collectAsStateWithLifecycle()
             val context = LocalContext.current
 
             val systemDark = isSystemInDarkTheme()
@@ -61,6 +63,7 @@ class MainActivity : ComponentActivity() {
                 var canDrawOverlays by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
                 var ignoringBattery by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
                 var showHighUsage by remember { mutableStateOf(false) }
+                var openSessionId by remember { mutableStateOf<Long?>(null) }
 
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
@@ -97,7 +100,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                if (showHighUsage) {
+                val closeSessionDetail: () -> Unit = {
+                    openSessionId = null
+                    vm.closeSession()
+                }
+
+                if (openSessionId != null) {
+                    BackHandler(onBack = closeSessionDetail)
+                    SessionDetailScreen(state = sessionDetail, onBack = closeSessionDetail)
+                } else if (showHighUsage) {
                     BackHandler { showHighUsage = false }
                     HighUsageScreen(
                         state = usage,
@@ -145,6 +156,11 @@ class MainActivity : ComponentActivity() {
                         onRapidRiseChange = vm::setRapidRiseEnabled,
                         onThemeModeChange = vm::setThemeMode,
                         onAccentChange = vm::setAccent,
+                        health = health,
+                        onSessionClick = { session ->
+                            vm.openSession(session.id)
+                            openSessionId = session.id
+                        },
                         ignoringBatteryOptimizations = ignoringBattery,
                         onRequestIgnoreBatteryOptimizations = {
                             runCatching {
