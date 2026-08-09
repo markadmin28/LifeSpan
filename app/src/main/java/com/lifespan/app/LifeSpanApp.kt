@@ -4,6 +4,8 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.util.Log
+import androidx.work.Configuration
 import com.lifespan.app.data.db.LifeSpanDatabase
 import com.lifespan.app.data.prefs.SettingsRepository
 import com.lifespan.app.data.repository.BatteryRepository
@@ -27,12 +29,17 @@ class AppContainer(context: Context) {
     val appUsageRepository = AppUsageRepository(context.applicationContext)
 }
 
-class LifeSpanApp : Application() {
+class LifeSpanApp : Application(), Configuration.Provider {
 
     lateinit var container: AppContainer
         private set
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setMinimumLoggingLevel(Log.INFO)
+            .build()
 
     override fun onCreate() {
         super.onCreate()

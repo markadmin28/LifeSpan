@@ -33,16 +33,20 @@ object SamplingScheduler {
     private const val WORK_NAME = "lifespan_battery_sampling"
 
     fun schedule(context: Context) {
-        val request = PeriodicWorkRequestBuilder<BatterySamplingWorker>(15, TimeUnit.MINUTES)
-            .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
-        )
+        runCatching {
+            val request = PeriodicWorkRequestBuilder<BatterySamplingWorker>(15, TimeUnit.MINUTES)
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                request,
+            )
+        }
     }
 
     fun cancel(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        runCatching {
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        }
     }
 }

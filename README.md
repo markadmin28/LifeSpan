@@ -11,12 +11,18 @@ levels, and manages custom charge limits (e.g. an 80% stop alert).
   reads instantaneous current via `BatteryManager.BATTERY_PROPERTY_CURRENT_NOW`,
   computes live wattage, and shows a persistent status notification.
 - **Alerts**: audio + vibration when the battery temperature reaches the overheat
-  threshold (default 42°C) or the user-defined charge limit is hit while charging.
+  threshold (default 42°C) or the user-defined charge limit is hit while charging;
+  optional persistent charge-limit alarm and rapid temperature-rise detection.
+- **Battery health**: estimated cycles / capacity / health % from charge history.
+- **Session charts**: tap a charge session for temperature and power over time.
+- **Onboarding wizard**: first-run permission walkthrough (notifications, usage
+  access, overlay, battery optimization).
 - **Room database** (`LifeSpanDatabase`): `charge_sessions` and
   `battery_telemetry_logs` (with a cascading foreign key) persist every session
   and telemetry sample.
-- **Compose UI**: live battery card (level, temperature, power, current, voltage),
-  start/stop control, configurable thresholds, and charge-session history.
+- **Compose UI**: live battery card (level, temperature, power, current, voltage,
+  time-to-full/empty), start/stop control, configurable thresholds, high-usage
+  list, floating charging bubble, home widget, QS tile, and theme switcher.
 
 ## Architecture
 MVVM + Clean-ish layering with unidirectional data flow:
@@ -39,9 +45,11 @@ Requires a JDK (17+) and the Android SDK (platform 35, build-tools 35).
 # One-time toolchain bootstrap (installs the SDK + writes local.properties)
 bash scripts/cloud-setup-android.sh
 
-./gradlew testDebugUnitTest   # run the JVM unit tests
-./gradlew assembleDebug       # build the debug APK (app/build/outputs/apk/debug/)
-./gradlew lintDebug           # Android lint
+./gradlew testDebugUnitTest        # JVM unit tests (incl. Roborazzi capture)
+./gradlew verifyRoborazziDebug     # fail on screenshot diffs
+./gradlew recordRoborazziDebug     # refresh goldens under app/src/test/screenshots/
+./gradlew assembleDebug            # debug APK (app/build/outputs/apk/debug/)
+./gradlew lintDebug                # Android lint
 ```
 
 If you already have an Android SDK, create a `local.properties` with
