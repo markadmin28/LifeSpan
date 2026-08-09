@@ -13,8 +13,14 @@ levels, and manages custom charge limits (e.g. an 80% stop alert).
 - **Alerts**: audio + vibration when the battery temperature reaches the overheat
   threshold (default 42°C) or the user-defined charge limit is hit while charging;
   optional persistent charge-limit alarm and rapid temperature-rise detection.
-- **Battery health**: estimated cycles / capacity / health % from charge history.
-- **Session charts**: tap a charge session for temperature and power over time.
+- **Battery health**: estimated cycles / capacity / health % from charge history,
+  plus the hardware-reported health (`EXTRA_HEALTH`) on the status card.
+- **History charts**: rolling 6-hour battery-level and temperature charts on the
+  dashboard, downsampled from the raw telemetry log.
+- **Session charts**: tap a charge session for level, temperature, and current
+  over time.
+- **History management**: one-tap "Clear history" (with confirmation) and
+  automatic pruning of telemetry older than 14 days.
 - **Onboarding wizard**: first-run permission walkthrough (notifications, usage
   access, overlay, battery optimization).
 - **Room database** (`LifeSpanDatabase`): `charge_sessions` and
