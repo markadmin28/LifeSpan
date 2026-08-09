@@ -29,8 +29,10 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [34], qualifiers = "w411dp-h915dp-xhdpi")
 class LifeSpanScreenshotTest {
 
+    private val now = System.currentTimeMillis()
+
     private val snapshot = BatterySnapshot(
-        timestamp = 1_700_000_000_000L,
+        timestamp = now,
         level = 64,
         voltageMv = 4300,
         currentUa = 1_500_000,
@@ -44,8 +46,8 @@ class LifeSpanScreenshotTest {
     private val sessions = listOf(
         ChargeSessionEntity(
             id = 1,
-            startTime = 1_699_996_400_000L,
-            endTime = 1_700_000_000_000L,
+            startTime = now - 3_600_000L,
+            endTime = now,
             startLevel = 42,
             endLevel = 80,
             plugType = "AC",
