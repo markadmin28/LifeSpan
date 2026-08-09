@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thermostat
@@ -29,6 +30,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -49,6 +51,7 @@ import com.lifespan.app.data.prefs.AppSettings
 import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertType
 import com.lifespan.app.domain.battery.TimeEstimator
+import com.lifespan.app.domain.health.BatteryHealth
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.data.db.ChargeSessionEntity
@@ -87,6 +90,8 @@ fun MainScreen(
     onAccentChange: (Accent) -> Unit = {},
     ignoringBatteryOptimizations: Boolean = true,
     onRequestIgnoreBatteryOptimizations: () -> Unit = {},
+    health: BatteryHealth = BatteryHealth(0.0, null, null, 0),
+    onOpenSession: (Long) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -121,6 +126,8 @@ fun MainScreen(
             }
 
             item { BatteryStatusCard(state.snapshot) }
+
+            item { BatteryHealthCard(health) }
 
             item {
                 HighUsageCard(
@@ -209,7 +216,7 @@ fun MainScreen(
                 }
             } else {
                 items(state.sessions, key = { it.id }) { session ->
-                    ChargeSessionCard(session)
+                    ChargeSessionCard(session, onClick = { onOpenSession(session.id) })
                 }
             }
 
@@ -435,6 +442,72 @@ private fun ThresholdsCard(
                 enabled = overheatEnabled,
             )
         }
+    }
+}
+
+@Composable
+private fun BatteryHealthCard(health: BatteryHealth) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Favorite,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Battery health", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (health.sampleCount == 0) {
+                            "Charge with monitoring on to estimate wear"
+                        } else {
+                            "From ${health.sampleCount} capacity sample${if (health.sampleCount == 1) "" else "s"}"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                Text(
+                    health.healthPercent?.let { "$it%" } ?: "—",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            health.healthPercent?.let { percent ->
+                Spacer(Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    progress = { percent / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                HealthMetric("Cycles", String.format(Locale.US, "%.1f", health.estimatedCycles))
+                HealthMetric(
+                    "Capacity",
+                    health.estimatedCapacityMah?.let { "$it mAh" } ?: "—",
+                )
+                HealthMetric("Sessions", health.sampleCount.toString())
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthMetric(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
     }
 }
 
@@ -682,19 +755,33 @@ private fun ThemeCard(
 }
 
 @Composable
-private fun ChargeSessionCard(session: ChargeSessionEntity) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun ChargeSessionCard(session: ChargeSessionEntity, onClick: () -> Unit = {}) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(session.plugType, fontWeight = FontWeight.Bold)
-                Text(
-                    formatTime(session.startTime),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        formatTime(session.startTime),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.Filled.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
             Spacer(Modifier.height(6.dp))
             val end = session.endLevel?.let { "$it%" } ?: "in progress"

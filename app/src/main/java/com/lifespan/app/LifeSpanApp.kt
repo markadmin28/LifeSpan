@@ -45,8 +45,10 @@ class LifeSpanApp : Application() {
                 .map { it.periodicSamplingEnabled }
                 .distinctUntilChanged()
                 .collect { enabled ->
-                    if (enabled) SamplingScheduler.schedule(this@LifeSpanApp)
-                    else SamplingScheduler.cancel(this@LifeSpanApp)
+                    runCatching {
+                        if (enabled) SamplingScheduler.schedule(this@LifeSpanApp)
+                        else SamplingScheduler.cancel(this@LifeSpanApp)
+                    }
                 }
         }
     }

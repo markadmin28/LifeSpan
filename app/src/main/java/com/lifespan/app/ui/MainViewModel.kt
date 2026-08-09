@@ -5,21 +5,28 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifespan.app.LifeSpanApp
 import com.lifespan.app.data.db.ChargeSessionEntity
+import com.lifespan.app.data.db.TelemetryLogEntity
 import com.lifespan.app.data.prefs.Accent
 import com.lifespan.app.data.prefs.AppSettings
 import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertEvaluator
 import com.lifespan.app.domain.alert.AlertThresholds
 import com.lifespan.app.domain.alert.AlertType
+import com.lifespan.app.domain.health.BatteryHealth
+import com.lifespan.app.domain.health.BatteryHealthCalculator
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.usage.AppUsage
 import com.lifespan.app.domain.usage.UsageRanker
 import com.lifespan.app.service.BatteryMonitorService
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -43,6 +50,7 @@ data class UsageUiState(
     fun isHigh(app: AppUsage): Boolean = UsageRanker.isHigh(app)
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val container = (application as LifeSpanApp).container
@@ -70,6 +78,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = MainUiState(),
     )
+
+    val health: StateFlow<BatteryHealth> = batteryRepository
+        .observeRecentSessions(limit = 200)
+        .map(BatteryHealthCalculator::compute)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = BatteryHealth(0.0, null, null, 0),
+        )
+
+    private val _selectedSessionId = MutableStateFlow<Long?>(null)
+    val selectedSessionId: StateFlow<Long?> = _selectedSessionId.asStateFlow()
+
+    val sessionLogs: StateFlow<List<TelemetryLogEntity>> = _selectedSessionId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList()) else batteryRepository.observeSessionLogs(id)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    fun openSession(id: Long) {
+        _selectedSessionId.value = id
+    }
+
+    fun closeSession() {
+        _selectedSessionId.value = null
+    }
 
     fun startMonitoring() = BatteryMonitorService.start(getApplication())
 
@@ -123,6 +161,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAccent(accent: Accent) = viewModelScope.launch {
         settingsRepository.setAccent(accent)
+    }
+
+    fun setOnboardingComplete(complete: Boolean) = viewModelScope.launch {
+        settingsRepository.setOnboardingComplete(complete)
     }
 
     private val _usage = MutableStateFlow(UsageUiState())
