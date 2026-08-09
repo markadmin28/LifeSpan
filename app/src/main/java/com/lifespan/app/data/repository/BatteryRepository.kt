@@ -41,6 +41,9 @@ class BatteryRepository(
     fun observeRecentSessions(limit: Int = 50): Flow<List<ChargeSessionEntity>> =
         sessionDao.observeRecent(limit)
 
+    fun observeSessionLogs(sessionId: Long): Flow<List<TelemetryLogEntity>> =
+        telemetryDao.observeForSession(sessionId)
+
     /** Adopt an already-open session (e.g. after a service restart). */
     suspend fun restoreActiveSession() = mutex.withLock {
         if (activeSessionId != null) return@withLock
