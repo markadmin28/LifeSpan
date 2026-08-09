@@ -24,9 +24,12 @@ object BatteryReader {
         val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
         val health = intent.getIntExtra(BatteryManager.EXTRA_HEALTH, 0)
         val technology = intent.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY)
-        val currentUa = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-        val chargeCounter =
-            batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
+        val currentUa = BatteryCalculator.sanitizeCurrentUa(
+            batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW),
+        )
+        val chargeCounter = BatteryCalculator.sanitizeChargeCounterMicroAh(
+            batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER),
+        )
 
         val isCharging = plugged > 0 ||
             status == BatteryManager.BATTERY_STATUS_CHARGING ||
@@ -42,7 +45,7 @@ object BatteryReader {
             plugType = PlugType.fromPluggedExtra(plugged),
             health = health,
             technology = technology,
-            chargeCounterMicroAh = if (chargeCounter > 0) chargeCounter else 0L,
+            chargeCounterMicroAh = chargeCounter,
         )
     }
 

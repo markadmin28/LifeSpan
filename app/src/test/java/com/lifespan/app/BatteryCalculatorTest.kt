@@ -47,4 +47,20 @@ class BatteryCalculatorTest {
         assertEquals(1500.0, BatteryCalculator.mahOverInterval(3000.0, 30 * 60_000L), 1e-6)
         assertEquals(0.0, BatteryCalculator.mahOverInterval(3000.0, 0L), 1e-9)
     }
+
+    @Test
+    fun sanitizeCurrentUa_mapsUnsupportedSentinelToZero() {
+        assertEquals(0, BatteryCalculator.sanitizeCurrentUa(Int.MIN_VALUE))
+        assertEquals(1_850_000, BatteryCalculator.sanitizeCurrentUa(1_850_000))
+        assertEquals(-500_000, BatteryCalculator.sanitizeCurrentUa(-500_000))
+        assertEquals(0, BatteryCalculator.sanitizeCurrentUa(0))
+    }
+
+    @Test
+    fun sanitizeChargeCounterMicroAh_rejectsNonPositiveAndSentinel() {
+        assertEquals(0L, BatteryCalculator.sanitizeChargeCounterMicroAh(Long.MIN_VALUE))
+        assertEquals(0L, BatteryCalculator.sanitizeChargeCounterMicroAh(0L))
+        assertEquals(0L, BatteryCalculator.sanitizeChargeCounterMicroAh(-1L))
+        assertEquals(3_000_000L, BatteryCalculator.sanitizeChargeCounterMicroAh(3_000_000L))
+    }
 }

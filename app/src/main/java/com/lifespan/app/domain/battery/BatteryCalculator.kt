@@ -37,6 +37,21 @@ object BatteryCalculator {
     }
 
     /**
+     * [BatteryManager.getIntProperty] returns [Int.MIN_VALUE] when the property
+     * is unsupported. Treat that sentinel as "unknown" (0 µA) so it cannot
+     * corrupt power, mAh integration, or ETA math.
+     */
+    fun sanitizeCurrentUa(rawUa: Int): Int =
+        if (rawUa == Int.MIN_VALUE) 0 else rawUa
+
+    /**
+     * [BatteryManager.getLongProperty] returns [Long.MIN_VALUE] when unsupported.
+     * Only positive charge-counter readings are usable.
+     */
+    fun sanitizeChargeCounterMicroAh(rawMicroAh: Long): Long =
+        if (rawMicroAh == Long.MIN_VALUE || rawMicroAh <= 0L) 0L else rawMicroAh
+
+    /**
      * Amount of charge added, in milliamp-hours, over a time delta given an
      * average current. `mAh = mA * hours`. Uses the absolute current so it is
      * agnostic to the device's charging-current sign convention.

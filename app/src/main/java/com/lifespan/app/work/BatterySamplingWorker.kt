@@ -22,6 +22,11 @@ class BatterySamplingWorker(
 
     override suspend fun doWork(): Result {
         val app = applicationContext as? LifeSpanApp ?: return Result.success()
+        // Foreground service is the live writer; skip to avoid duplicate
+        // telemetry rows and charge-session open/close races.
+        if (app.container.batteryRepository.monitoring.value) {
+            return Result.success()
+        }
         val snapshot = BatteryReader.sample(applicationContext) ?: return Result.success()
         app.container.batteryRepository.record(snapshot)
         LifeSpanWidgetProvider.update(applicationContext, snapshot)
