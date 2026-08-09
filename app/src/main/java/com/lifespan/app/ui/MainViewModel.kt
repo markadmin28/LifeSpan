@@ -18,6 +18,7 @@ import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.usage.AppUsage
 import com.lifespan.app.domain.usage.UsageRanker
 import com.lifespan.app.service.BatteryMonitorService
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -138,6 +139,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _selectedSession = MutableStateFlow<ChargeSessionEntity?>(null)
     val selectedSession: StateFlow<ChargeSessionEntity?> = _selectedSession.asStateFlow()
+    @OptIn(ExperimentalCoroutinesApi::class)
     val sessionTelemetry: StateFlow<List<TelemetryLogEntity>> = _selectedSession
         .flatMapLatest { session ->
             session?.let { batteryRepository.observeTelemetryForSession(it.id) } ?: flowOf(emptyList())
