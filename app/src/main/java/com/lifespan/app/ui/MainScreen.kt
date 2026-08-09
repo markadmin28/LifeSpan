@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BatteryAlert
@@ -29,6 +30,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -40,6 +42,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -49,6 +52,7 @@ import com.lifespan.app.data.prefs.AppSettings
 import com.lifespan.app.data.prefs.ThemeMode
 import com.lifespan.app.domain.alert.AlertType
 import com.lifespan.app.domain.battery.TimeEstimator
+import com.lifespan.app.domain.health.BatteryHealth
 import com.lifespan.app.domain.model.BatterySnapshot
 import com.lifespan.app.domain.model.PlugType
 import com.lifespan.app.data.db.ChargeSessionEntity
@@ -87,6 +91,8 @@ fun MainScreen(
     onAccentChange: (Accent) -> Unit = {},
     ignoringBatteryOptimizations: Boolean = true,
     onRequestIgnoreBatteryOptimizations: () -> Unit = {},
+    health: BatteryHealth = BatteryHealth.EMPTY,
+    onOpenSession: (Long) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -121,6 +127,8 @@ fun MainScreen(
             }
 
             item { BatteryStatusCard(state.snapshot) }
+
+            item { BatteryHealthCard(health) }
 
             item {
                 HighUsageCard(
@@ -209,7 +217,7 @@ fun MainScreen(
                 }
             } else {
                 items(state.sessions, key = { it.id }) { session ->
-                    ChargeSessionCard(session)
+                    ChargeSessionCard(session, onClick = { onOpenSession(session.id) })
                 }
             }
 
@@ -682,8 +690,95 @@ private fun ThemeCard(
 }
 
 @Composable
-private fun ChargeSessionCard(session: ChargeSessionEntity) {
+private fun BatteryHealthCard(health: BatteryHealth) {
     Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text("Battery health", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Estimated from your charge history",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                health.healthPercent?.let { pct ->
+                    Text(
+                        "$pct%",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = healthColor(pct),
+                    )
+                }
+            }
+
+            health.healthPercent?.let { pct ->
+                Spacer(Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    progress = { (pct / 100f).coerceIn(0f, 1f) },
+                    color = healthColor(pct),
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                HealthStat("Cycles", String.format(Locale.US, "%.1f", health.estimatedCycles))
+                HealthStat(
+                    "Capacity",
+                    health.estimatedCapacityMah?.let { "$it mAh" } ?: "—",
+                )
+                HealthStat("Sessions", health.sampleCount.toString())
+            }
+
+            if (health.healthPercent == null) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Charge a few times (10%+ each) to estimate capacity and health.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthStat(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+    }
+}
+
+private fun healthColor(percent: Int): Color = when {
+    percent >= 90 -> Ok
+    percent >= 75 -> Amber
+    else -> Danger
+}
+
+@Composable
+private fun ChargeSessionCard(session: ChargeSessionEntity, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
