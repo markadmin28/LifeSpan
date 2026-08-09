@@ -1,0 +1,4 @@
+{
+  "name": "LifeSpan (Android)",
+  "install": "bash scripts/cloud-setup-android.sh"
+}
